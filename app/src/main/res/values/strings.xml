@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Indian Screenreader</string>
+    <string name="accessibility_service_description">Indian screenreader provides spoken feedback to help visually impaired users interact with their device.</string>
+</resources>
