@@ -1,56 +1,39 @@
 import sys
+from event_handler import event_handler_instance
+from settings import active_settings
 
-def get_text_from_node(node):
-    if node is None:
-        return ""
-    
-    # Try to get content description
-    content_desc = node.getContentDescription()
-    if content_desc:
-        return str(content_desc)
-    
-    # Try to get text
-    text = node.getText()
-    if text:
-        return str(text)
-    
-    return ""
 
 def on_accessibility_event(service, event):
-    try:
-        from android.view.accessibility import AccessibilityEvent
+    """Main callback invoked by IndianScreenReaderService.kt for every accessibility event."""
+    event_handler_instance.process_event(service, event)
 
-        event_type = event.getEventType()
-
-        # We care about focus changes, clicks, and hover enter (touch exploration)
-        if event_type == AccessibilityEvent.TYPE_VIEW_FOCUSED or \
-           event_type == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER or \
-           event_type == AccessibilityEvent.TYPE_VIEW_CLICKED:
-            
-            node = event.getSource()
-            if node:
-                text_to_speak = get_text_from_node(node)
-                
-                # If there's text, ask the service to speak it
-                if text_to_speak.strip():
-                    service.speak(text_to_speak)
-                
-                # Recycle the node to avoid memory leaks
-                node.recycle()
-
-        elif event_type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:
-            # Maybe read the window title or the first focusable element
-            node = event.getSource()
-            if node:
-                text = get_text_from_node(node)
-                if text.strip():
-                    service.speak(f"Window: {text}")
-                node.recycle()
-
-    except Exception as e:
-        # Print to android logcat
-        print(f"Python error in on_accessibility_event: {e}", file=sys.stderr)
 
 def on_interrupt():
-    print("Python on_interrupt called", file=sys.stdout)
-    pass
+    """Callback invoked when speech or service is interrupted."""
+    event_handler_instance.on_interrupt()
+
+
+def set_verbosity(level):
+    """Dynamically set verbosity level ('high', 'medium', 'low')."""
+    if level in ["high", "medium", "low"]:
+        active_settings.VERBOSITY_LEVEL = level
+
+
+def set_announce_element_types(enabled):
+    """Enable or disable element type announcements (e.g. 'Button')."""
+    active_settings.ANNOUNCE_ELEMENT_TYPES = bool(enabled)
+
+
+def set_announce_element_state(enabled):
+    """Enable or disable state announcements (e.g. 'Checked')."""
+    active_settings.ANNOUNCE_ELEMENT_STATE = bool(enabled)
+
+
+def set_read_window_changes(enabled):
+    """Enable or disable reading window title changes."""
+    active_settings.READ_WINDOW_CHANGES = bool(enabled)
+
+
+def set_filter_duplicates(enabled):
+    """Enable or disable duplicate speech filtering."""
+    active_settings.FILTER_DUPLICATE_SPEECH = bool(enabled)

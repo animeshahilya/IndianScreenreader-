@@ -7,6 +7,7 @@ import android.util.Log
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.PyObject
+import java.util.Locale
 
 class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener {
 
@@ -30,6 +31,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val py = Python.getInstance()
         try {
             pythonModule = py.getModule("screen_reader")
+            Log.i(TAG, "Loaded python screen_reader module successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load Python module", e)
         }
@@ -38,47 +40,64 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             ttsInitialized = true
-            Log.i(TAG, "TTS Initialized")
+            tts?.language = Locale.getDefault()
+            Log.i(TAG, "TTS Initialized successfully")
             speak("Indian Screen reader started")
         } else {
-            Log.e(TAG, "TTS Initialization failed")
+            Log.e(TAG, "TTS Initialization failed with status $status")
         }
     }
 
-    fun speak(text: String) {
-        if (ttsInitialized && text.isNotEmpty()) {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+    fun speak(text: String, flush: Boolean = true) {
+        if (ttsInitialized && text.isNotBlank()) {
+            val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            tts?.speak(text, queueMode, null, "UtteranceId_${System.currentTimeMillis()}")
+        }
+    }
+
+    fun stopSpeech() {
+        if (ttsInitialized) {
+            tts?.stop()
+        }
+    }
+
+    fun setSpeechRate(rate: Float) {
+        if (ttsInitialized) {
+            tts?.setSpeechRate(rate)
+        }
+    }
+
+    fun setPitch(pitch: Float) {
+        if (ttsInitialized) {
+            tts?.setPitch(pitch)
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (pythonModule != null) {
             try {
-                // Pass the event to Python. We pass `this` so Python can call `speak()`,
-                // and we pass the `event` object.
                 pythonModule?.callAttr("on_accessibility_event", this, event)
             } catch (e: Exception) {
-                Log.e(TAG, "Error calling Python on_accessibility_event", e)
+                Log.e(TAG, "Error in Python on_accessibility_event", e)
             }
         }
     }
 
     override fun onInterrupt() {
         Log.i(TAG, "Service Interrupted")
-        if (ttsInitialized) {
-            tts?.stop()
-        }
+        stopSpeech()
         if (pythonModule != null) {
             try {
                 pythonModule?.callAttr("on_interrupt")
             } catch (e: Exception) {
-                Log.e(TAG, "Error calling Python on_interrupt", e)
+                Log.e(TAG, "Error in Python on_interrupt", e)
             }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopSpeech()
         tts?.shutdown()
     }
 }
