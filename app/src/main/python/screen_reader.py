@@ -1,197 +1,90 @@
-import sys
+# Chaquopy Entry Point for Indian Screenreader
+import settings
+import node_parser
 from event_handler import event_handler_instance
-from settings import active_settings
 from ai_service import ai_service_instance
 
 
 def on_accessibility_event(service, event):
-    """Main callback invoked by IndianScreenReaderService.kt for every accessibility event."""
+    """Main event dispatcher called directly from Kotlin AccessibilityService."""
     event_handler_instance.process_event(service, event)
 
 
 def on_gesture(service, gesture_id):
-    """Callback invoked when user performs a touch gesture."""
+    """Main gesture dispatcher called directly from Kotlin AccessibilityService."""
     return event_handler_instance.handle_gesture(service, gesture_id)
 
 
-def on_interrupt():
-    """Callback invoked when speech or service is interrupted."""
-    event_handler_instance.on_interrupt()
+def open_indian_menu(service):
+    """Opens TalkBack-style Indian Context Menu."""
+    event_handler_instance.open_indian_menu(service)
 
 
-# --- Custom Gesture Remapping ---
-def remap_gesture(gesture_id, action_name):
-    """Remaps a gesture ID to a custom action name."""
-    active_settings.GESTURE_MAP[int(gesture_id)] = str(action_name).lower().strip()
+def close_indian_menu(service):
+    """Closes Indian Context Menu."""
+    event_handler_instance.close_indian_menu(service)
 
 
-# --- Advanced Customization Setters ---
-def set_announce_grid_position(enabled):
-    active_settings.ANNOUNCE_GRID_POSITION = bool(enabled)
-
-
-def set_announce_list_count(enabled):
-    active_settings.ANNOUNCE_LIST_COUNT = bool(enabled)
-
-
-def set_announce_view_ids(enabled):
-    active_settings.ANNOUNCE_VIEW_IDS = bool(enabled)
-
-
-def set_ignore_decorative_images(enabled):
-    active_settings.IGNORE_DECORATIVE_IMAGES = bool(enabled)
-
-
-def set_audio_beep_volume(volume):
-    active_settings.AUDIO_BEEP_VOLUME = max(0, min(100, int(volume)))
-
-
-def set_haptic_duration_ms(ms):
-    active_settings.HAPTIC_DURATION_MS = max(0, min(500, int(ms)))
-
-
-# --- Standard Option Setters ---
-def set_verbosity(level):
-    if level in ["high", "medium", "low"]:
-        active_settings.VERBOSITY_LEVEL = level
-
-
-def set_announce_element_types(enabled):
-    active_settings.ANNOUNCE_ELEMENT_TYPES = bool(enabled)
-
-
-def set_announce_element_state(enabled):
-    active_settings.ANNOUNCE_ELEMENT_STATE = bool(enabled)
-
-
-def set_read_window_changes(enabled):
-    active_settings.READ_WINDOW_CHANGES = bool(enabled)
-
-
-def set_filter_duplicates(enabled):
-    active_settings.FILTER_DUPLICATE_SPEECH = bool(enabled)
-
-
-# --- NVDA Specific Options ---
 def toggle_input_help(service):
-    active_settings.INPUT_HELP_MODE = not active_settings.INPUT_HELP_MODE
-    status = "ON" if active_settings.INPUT_HELP_MODE else "OFF"
-    msg = f"Input Help {status}"
-    if hasattr(service, "speak"):
-        service.speak(msg)
-    return active_settings.INPUT_HELP_MODE
+    """NVDA Feature: Toggles Input Help (Practice Mode)."""
+    settings.active_settings.INPUT_HELP_MODE = not settings.active_settings.INPUT_HELP_MODE
+    state = "ON" if settings.active_settings.INPUT_HELP_MODE else "OFF"
+    msg = f"Input Help {state}. In this mode, gestures announce their action without executing."
+    service.speak(msg)
 
 
-def set_punctuation_verbosity(level):
-    if level in ["none", "some", "all"]:
-        active_settings.PUNCTUATION_VERBOSITY = level
-
-
-def set_capitalization_mode(mode):
-    if mode in ["prefix", "pitch", "none"]:
-        active_settings.ANNOUNCE_CAPITALIZATION = mode
-
-
-def set_speech_rate(service, rate):
-    try:
-        r = float(rate)
-        active_settings.SPEECH_RATE = r
-        if hasattr(service, "setSpeechRate"):
-            service.setSpeechRate(r)
-    except Exception as e:
-        print(f"Error setting speech rate: {e}", file=sys.stderr)
-
-
-def set_speech_pitch(service, pitch):
-    try:
-        p = float(pitch)
-        active_settings.SPEECH_PITCH = p
-        if hasattr(service, "setPitch"):
-            service.setPitch(p)
-    except Exception as e:
-        print(f"Error setting speech pitch: {e}", file=sys.stderr)
+def toggle_punctuation_verbosity(service):
+    """NVDA Feature: Cycles punctuation verbosity (all -> some -> none)."""
+    current = settings.active_settings.PUNCTUATION_VERBOSITY
+    if current == "all":
+        new_mode = "some"
+    elif current == "some":
+        new_mode = "none"
+    else:
+        new_mode = "all"
+    settings.active_settings.PUNCTUATION_VERBOSITY = new_mode
+    service.speak(f"Punctuation verbosity set to {new_mode}")
 
 
 def read_device_status(service):
-    if hasattr(service, "getDeviceStatusString"):
-        status_str = service.getDeviceStatusString()
-        if status_str and hasattr(service, "speak"):
-            service.speak(f"Status: {status_str}")
-            return True
-    return False
-
-
-# --- AI Studio Gemini API Features ---
-def set_gemini_api_key(key):
-    active_settings.GEMINI_API_KEY = str(key).strip()
-
-
-def set_translation_target_language(language):
-    active_settings.TRANSLATION_TARGET_LANGUAGE = str(language).strip()
-
-
-def toggle_auto_translate(service=None):
-    active_settings.AUTO_TRANSLATE_ENABLED = not active_settings.AUTO_TRANSLATE_ENABLED
-    status = "ON" if active_settings.AUTO_TRANSLATE_ENABLED else "OFF"
-    msg = f"AI Auto Translation {status} ({active_settings.TRANSLATION_TARGET_LANGUAGE})"
-    if service and hasattr(service, "speak"):
-        service.speak(msg)
-    return active_settings.AUTO_TRANSLATE_ENABLED
-
-
-def toggle_text_simplification(service=None):
-    active_settings.SIMPLIFY_TEXT_ENABLED = not active_settings.SIMPLIFY_TEXT_ENABLED
-    status = "ON" if active_settings.SIMPLIFY_TEXT_ENABLED else "OFF"
-    msg = f"AI Text Simplification {status}"
-    if service and hasattr(service, "speak"):
-        service.speak(msg)
-    return active_settings.SIMPLIFY_TEXT_ENABLED
+    """NVDA Feature: Reads Time & Battery Status."""
+    status_str = service.getDeviceStatusString()
+    service.speak(f"Device Status: {status_str}")
 
 
 def ai_summarize_screen(service):
-    if hasattr(service, "getRootInActiveWindow"):
-        root = service.getRootInActiveWindow()
-        if root:
-            from node_parser import get_node_raw_text
-            screen_text = get_node_raw_text(root)
-            summary = ai_service_instance.summarize_screen(screen_text)
-            if hasattr(service, "speak"):
-                service.speak(f"AI Screen Summary: {summary}")
-            return summary
-    return "Could not retrieve screen text."
+    """Google AI Studio Gemini Feature: Summarizes current active screen content."""
+    root = service.getRootInActiveWindow()
+    if root is None:
+        service.speak("Cannot capture screen content.")
+        return
+
+    screen_text = node_parser.get_node_raw_text(root)
+    if hasattr(root, "recycle"):
+        root.recycle()
+
+    if not screen_text:
+        service.speak("No text found on screen to summarize.")
+        return
+
+    service.speak("Summarizing screen content using Gemini AI...")
+
+    def on_summary_ready(summary):
+        service.speak(f"AI Screen Summary: {summary}")
+
+    ai_service_instance.summarize_screen_async(screen_text, on_summary_ready)
 
 
-def ai_translate_text(service, text, target_language="Hindi"):
-    translated = ai_service_instance.translate_text(text, target_language)
-    if hasattr(service, "speak"):
-        service.speak(translated)
-    return translated
+def set_gemini_api_key(key):
+    """Sets Google AI Studio Gemini API key dynamically."""
+    settings.active_settings.GEMINI_API_KEY = key
 
 
-def ai_rewrite_simplified(service, text):
-    simplified = ai_service_instance.rewrite_simplified(text)
-    if hasattr(service, "speak"):
-        service.speak(simplified)
-    return simplified
+def remap_gesture(gesture_id, action_name):
+    """Remaps a gesture ID to a custom action string name."""
+    settings.active_settings.GESTURE_MAP[gesture_id] = action_name
 
 
-def ai_describe_image_b64(service, base64_image):
-    description = ai_service_instance.describe_image_b64(base64_image)
-    if hasattr(service, "speak"):
-        service.speak(f"AI Image Description: {description}")
-    return description
-
-
-def perform_global_action(service, action_name):
-    action_name = str(action_name).lower()
-    if action_name == "back" and hasattr(service, "performGlobalBack"):
-        return service.performGlobalBack()
-    elif action_name == "home" and hasattr(service, "performGlobalHome"):
-        return service.performGlobalHome()
-    elif action_name == "recents" and hasattr(service, "performGlobalRecents"):
-        return service.performGlobalRecents()
-    elif action_name == "notifications" and hasattr(service, "performGlobalNotifications"):
-        return service.performGlobalNotifications()
-    elif action_name == "quick_settings" and hasattr(service, "performGlobalQuickSettings"):
-        return service.performGlobalQuickSettings()
-    return False
+def on_interrupt():
+    """Service interruption handler."""
+    pass
