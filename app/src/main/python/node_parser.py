@@ -1,4 +1,6 @@
 # Helper module for parsing Android AccessibilityNodeInfo objects
+import functools
+import re
 
 CLASS_ROLE_MAP = {
     # Standard Android Widgets
@@ -62,6 +64,14 @@ PUNCTUATION_MAP_SOME = {
 }
 
 
+@functools.lru_cache(maxsize=128)
+def get_role_by_class_name(class_name):
+    """Fast LRU cached lookup for view class roles."""
+    if not class_name:
+        return ""
+    return CLASS_ROLE_MAP.get(class_name, "")
+
+
 def apply_punctuation_verbosity(text, mode):
     """Expands punctuation symbols into spoken words based on NVDA verbosity level."""
     if not text or mode == "none":
@@ -92,7 +102,7 @@ def get_role_description(node):
         return ""
 
     class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
-    return CLASS_ROLE_MAP.get(class_name, "")
+    return get_role_by_class_name(class_name)
 
 
 def is_heading(node):
@@ -164,7 +174,6 @@ def get_grid_or_list_position(node, settings):
 
     positions = []
 
-    # Grid / Table item position
     if settings.ANNOUNCE_GRID_POSITION and hasattr(node, "getCollectionItemInfo"):
         item_info = node.getCollectionItemInfo()
         if item_info:
@@ -175,7 +184,6 @@ def get_grid_or_list_position(node, settings):
             elif row >= 0:
                 positions.append(f"Row {row + 1}")
 
-    # List total item count
     if settings.ANNOUNCE_LIST_COUNT and hasattr(node, "getCollectionInfo"):
         collection_info = node.getCollectionInfo()
         if collection_info:
@@ -191,7 +199,6 @@ def get_view_id_resource_name(node, settings):
     if settings.ANNOUNCE_VIEW_IDS and hasattr(node, "getViewIdResourceName"):
         res_name = node.getViewIdResourceName()
         if res_name:
-            # e.g., "com.app:id/btn_submit" -> "ID: btn_submit"
             short_id = res_name.split("/")[-1] if "/" in res_name else res_name
             return f"ID: {short_id}"
     return ""
@@ -202,31 +209,26 @@ def get_node_raw_text(node):
     if node is None:
         return ""
 
-    # Priority 1: Error text
     if hasattr(node, "getError"):
         err = node.getError()
         if err:
             return f"Error: {err}".strip()
 
-    # Priority 2: Content Description
     if hasattr(node, "getContentDescription"):
         content_desc = node.getContentDescription()
         if content_desc:
             return str(content_desc).strip()
 
-    # Priority 3: Text
     if hasattr(node, "getText"):
         text = node.getText()
         if text:
             return str(text).strip()
 
-    # Priority 4: Hint Text
     if hasattr(node, "getHintText"):
         hint = node.getHintText()
         if hint:
             return str(hint).strip()
 
-    # Priority 5: Fallback to child text
     if hasattr(node, "getChildCount") and node.getChildCount() > 0:
         child_texts = []
         for i in range(min(node.getChildCount(), 5)):
@@ -263,11 +265,9 @@ def format_node_speech(node, settings):
     class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
     raw_text = get_node_raw_text(node)
 
-    # Option to ignore decorative unlabelled images
     if settings.IGNORE_DECORATIVE_IMAGES and "ImageView" in class_name and not raw_text:
         return ""
 
-    # Optional AI Translation or Simplification pipeline
     if raw_text and getattr(settings, "GEMINI_API_KEY", ""):
         from ai_service import ai_service_instance
         if getattr(settings, "AUTO_TRANSLATE_ENABLED", False):
