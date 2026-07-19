@@ -1,6 +1,7 @@
 package com.indian.screenreader
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -21,6 +22,7 @@ import com.chaquo.python.android.AndroidPlatform
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener {
 
@@ -30,6 +32,25 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     private var ttsInitialized = false
     private var toneGenerator: ToneGenerator? = null
     private var vibrator: Vibrator? = null
+    private var isScreenOn = true
+
+    private val executorService = Executors.newFixedThreadPool(2)
+
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
+                    stopSpeech()
+                    Log.i(TAG, "Screen OFF - Suspending background screen reader activity")
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    isScreenOn = true
+                    Log.i(TAG, "Screen ON - Resuming screen reader")
+                }
+            }
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -44,6 +65,17 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing tone/vibration generator", e)
+        }
+
+        // Register Screen ON/OFF Receiver
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
+            registerReceiver(screenStateReceiver, filter)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering screen state receiver", e)
         }
 
         // Initialize Chaquopy
@@ -74,6 +106,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun speak(text: String, flush: Boolean = true) {
+        if (!isScreenOn) return
+
         if (ttsInitialized && text.isNotBlank()) {
             val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
             tts?.speak(text, queueMode, null, "Utterance_${System.currentTimeMillis()}")
@@ -95,6 +129,24 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun setPitch(pitch: Float) {
         if (ttsInitialized) {
             tts?.setPitch(pitch)
+        }
+    }
+
+    fun setLanguage(languageCode: String) {
+        if (!ttsInitialized) return
+        try {
+            val locale = when (languageCode.lowercase()) {
+                "hi" -> Locale("hi", "IN")
+                "ta" -> Locale("ta", "IN")
+                "te" -> Locale("te", "IN")
+                "bn" -> Locale("bn", "IN")
+                "mr" -> Locale("mr", "IN")
+                "gu" -> Locale("gu", "IN")
+                else -> Locale.ENGLISH
+            }
+            tts?.language = locale
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting TTS locale for $languageCode", e)
         }
     }
 
@@ -121,7 +173,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    // NVDA Device Status helper
     fun getDeviceStatusString(): String {
         return try {
             val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
@@ -139,7 +190,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    // Handle physical key events (e.g. Volume keys to interrupt speech)
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
@@ -149,9 +199,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         return super.onKeyEvent(event)
     }
 
-    // Gesture Handling
     override fun onGesture(gestureId: Int): Boolean {
-        Log.i(TAG, "OnGesture triggered: $gestureId")
+        if (!isScreenOn) return false
+
+        stopSpeech() // Cancel any ongoing background speech on new gesture
         playHapticFeedback(25L)
 
         if (pythonModule != null) {
@@ -180,7 +231,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    // Navigation & Focus Helpers
     fun performFocusNext(): Boolean {
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
@@ -229,7 +279,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         return focused.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
     }
 
-    // Global Actions
     fun performGlobalBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
     fun performGlobalHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
     fun performGlobalRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
@@ -237,6 +286,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun performGlobalQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (!isScreenOn) return
+
         if (pythonModule != null) {
             try {
                 pythonModule?.callAttr("on_accessibility_event", this, event)
@@ -260,8 +311,14 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(screenStateReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering receiver", e)
+        }
         stopSpeech()
         tts?.shutdown()
         toneGenerator?.release()
+        executorService.shutdown()
     }
 }

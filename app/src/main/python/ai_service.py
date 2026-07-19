@@ -1,5 +1,7 @@
 import json
+import re
 import sys
+import threading
 import urllib.request
 from settings import active_settings
 
@@ -14,8 +16,28 @@ class GeminiAIService:
     def get_api_key(self):
         return getattr(active_settings, "GEMINI_API_KEY", "").strip()
 
+    def detect_script_language(self, text):
+        """Detects script type (Devanagari/Hindi, Tamil, Telugu, Bengali, Latin/English)."""
+        if not text:
+            return "en"
+
+        # Devanagari Unicode Range (\u0900-\u097F)
+        if re.search(r"[\u0900-\u097F]", text):
+            return "hi"
+        # Tamil Unicode Range (\u0B80-\u0BFF)
+        elif re.search(r"[\u0B80-\u0BFF]", text):
+            return "ta"
+        # Telugu Unicode Range (\u0C00-\u0C7F)
+        elif re.search(r"[\u0C00-\u0C7F]", text):
+            return "te"
+        # Bengali Unicode Range (\u0980-\u09FF)
+        elif re.search(r"[\u0980-\u09FF]", text):
+            return "bn"
+
+        return "en"
+
     def make_gemini_request(self, prompt, base64_image=None):
-        """Helper to send a JSON payload to Google AI Studio Gemini API using urllib."""
+        """Helper to send a JSON payload to Google AI Studio Gemini API using urllib with strict timeout handling."""
         api_key = self.get_api_key()
         if not api_key:
             return "Google AI Studio API Key not set. Please set your API key in settings."
@@ -48,11 +70,11 @@ class GeminiAIService:
                 method="POST"
             )
 
-            with urllib.request.urlopen(req, timeout=10) as response:
+            # Strict 5-second timeout for responsiveness
+            with urllib.request.urlopen(req, timeout=5) as response:
                 res_body = response.read().decode("utf-8")
                 res_json = json.loads(res_body)
 
-                # Extract text response from Gemini API
                 candidates = res_json.get("candidates", [])
                 if candidates:
                     parts = candidates[0].get("content", {}).get("parts", [])
@@ -63,10 +85,17 @@ class GeminiAIService:
 
         except Exception as e:
             print(f"Error calling Gemini API: {e}", file=sys.stderr)
-            return f"AI Service error: {str(e)}"
+            return f"AI Service unavailable."
+
+    def summarize_screen_async(self, screen_text, callback):
+        """Asynchronously summarizes screen text without blocking UI or Accessibility loops."""
+        def run():
+            summary = self.summarize_screen(screen_text)
+            callback(summary)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def summarize_screen(self, screen_text):
-        """Asks Gemini to summarize the current screen layout into 2 clear sentences."""
         if not screen_text or not screen_text.strip():
             return "Screen has no readable text to summarize."
 
@@ -78,7 +107,6 @@ class GeminiAIService:
         return self.make_gemini_request(prompt)
 
     def translate_text(self, text, target_language="Hindi"):
-        """Translates text into target_language using Gemini API."""
         if not text or not text.strip():
             return text
 
@@ -90,7 +118,6 @@ class GeminiAIService:
         return self.make_gemini_request(prompt)
 
     def rewrite_simplified(self, text):
-        """Rewrites complex text into plain, easy-to-understand language."""
         if not text or not text.strip():
             return text
 
@@ -102,7 +129,6 @@ class GeminiAIService:
         return self.make_gemini_request(prompt)
 
     def describe_unlabeled_icon(self, class_name, context_text=""):
-        """Infers the function of an unlabeled UI icon based on context."""
         prompt = (
             "An unlabeled UI button was tapped in a mobile app. "
             f"Widget type: '{class_name}'. Nearby context: '{context_text}'. "
@@ -111,7 +137,6 @@ class GeminiAIService:
         return self.make_gemini_request(prompt)
 
     def describe_image_b64(self, base64_jpeg):
-        """Sends an image to Gemini Vision API for natural scene description."""
         prompt = (
             "Describe what is in this image concisely in 1 or 2 sentences for a blind user."
         )
