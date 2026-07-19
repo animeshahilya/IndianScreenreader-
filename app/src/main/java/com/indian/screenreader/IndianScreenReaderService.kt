@@ -5,16 +5,20 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
+import android.graphics.PixelFormat
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.BatteryManager
-import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.chaquo.python.PyObject
@@ -25,6 +29,11 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
+/**
+ * Modern Indian Screenreader Accessibility Service.
+ * Minimum target: Android 16 (minSdk = 36).
+ * Back-dated legacy compatibility code has been removed.
+ */
 class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     private val TAG = "IndianScreenReader"
@@ -33,7 +42,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     private var ttsInitialized = false
     private var toneGenerator: ToneGenerator? = null
     private var vibrator: Vibrator? = null
+    private var windowManager: WindowManager? = null
+    private var curtainView: View? = null
     private var isScreenOn = true
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val executorService = Executors.newFixedThreadPool(2)
 
@@ -43,7 +55,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 Intent.ACTION_SCREEN_OFF -> {
                     isScreenOn = false
                     stopSpeech()
-                    Log.i(TAG, "Screen OFF - Suspending background screen reader activity")
+                    Log.i(TAG, "Screen OFF - Suspending background activity")
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
@@ -55,17 +67,18 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.i(TAG, "Service Connected")
+        Log.i(TAG, "Service Connected (Android 16+ Engine)")
 
         // Initialize TTS
         tts = TextToSpeech(this, this)
 
-        // Initialize ToneGenerator & Vibrator for feedback
+        // Initialize ToneGenerator, Vibrator & WindowManager
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 60)
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing tone/vibration generator", e)
+            Log.e(TAG, "Error initializing audio/vibration/window manager", e)
         }
 
         // Register Screen ON/OFF Receiver
@@ -79,7 +92,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             Log.e(TAG, "Error registering screen state receiver", e)
         }
 
-        // Initialize Chaquopy
+        // Initialize Chaquopy Python Engine
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
@@ -87,7 +100,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val py = Python.getInstance()
         try {
             pythonModule = py.getModule("screen_reader")
-            Log.i(TAG, "Loaded python screen_reader module successfully")
+            Log.i(TAG, "Loaded Python screen_reader module successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load Python module", e)
         }
@@ -151,6 +164,41 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    /**
+     * Screen Curtain Privacy Feature: Blacks out the screen display
+     * while touch exploration, TTS, and haptics remain fully active.
+     */
+    fun setScreenCurtainEnabled(enabled: Boolean) {
+        mainHandler.post {
+            try {
+                if (enabled) {
+                    if (curtainView == null && windowManager != null) {
+                        curtainView = View(this).apply {
+                            setBackgroundColor(Color.BLACK)
+                        }
+                        val params = WindowManager.LayoutParams(
+                            WindowManager.LayoutParams.MATCH_PARENT,
+                            WindowManager.LayoutParams.MATCH_PARENT,
+                            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                            PixelFormat.TRANSLUCENT
+                        )
+                        windowManager?.addView(curtainView, params)
+                        Log.i(TAG, "Screen Curtain Activated")
+                    }
+                } else {
+                    curtainView?.let {
+                        windowManager?.removeView(it)
+                        curtainView = null
+                        Log.i(TAG, "Screen Curtain Deactivated")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error toggling Screen Curtain overlay", e)
+            }
+        }
+    }
+
     fun playAudioBeep(toneType: Int = ToneGenerator.TONE_PROP_BEEP) {
         try {
             toneGenerator?.startTone(toneType, 50)
@@ -162,12 +210,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun playHapticFeedback(durationMs: Long = 30L) {
         try {
             if (vibrator != null && vibrator!!.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator?.vibrate(durationMs)
-                }
+                vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error triggering vibration", e)
@@ -203,7 +246,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     override fun onGesture(gestureId: Int): Boolean {
         if (!isScreenOn) return false
 
-        stopSpeech() // Cancel any ongoing background speech on new gesture
+        stopSpeech()
         playHapticFeedback(25L)
 
         if (pythonModule != null) {
@@ -314,8 +357,9 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         super.onDestroy()
         try {
             unregisterReceiver(screenStateReceiver)
+            setScreenCurtainEnabled(false)
         } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering receiver", e)
+            Log.e(TAG, "Error unregistering receiver or removing curtain", e)
         }
         stopSpeech()
         tts?.shutdown()

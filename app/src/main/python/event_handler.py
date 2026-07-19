@@ -65,7 +65,6 @@ class EventHandler:
         service.speak("Indian Menu closed.")
 
     def navigate_indian_menu(self, service, direction):
-        """Navigates up/down through Indian Menu items."""
         total_items = len(active_settings.INDIAN_MENU_ITEMS)
         if direction > 0:
             active_settings.INDIAN_MENU_SELECTED_INDEX = (active_settings.INDIAN_MENU_SELECTED_INDEX + 1) % total_items
@@ -99,11 +98,13 @@ class EventHandler:
         elif idx == 6:  # Punctuation Verbosity
             import screen_reader
             screen_reader.toggle_punctuation_verbosity(service)
-        elif idx == 7:  # Close Menu
+        elif idx == 7:  # Toggle Screen Curtain
+            import screen_reader
+            screen_reader.toggle_screen_curtain(service)
+        elif idx == 8:  # Close Menu
             service.speak("Indian Menu closed.")
 
     def handle_gesture(self, service, gesture_id):
-        """Routes gestures with Indian Menu priority, practice mode support, and customizable mapping."""
         # 1. Check Indian Menu state first
         if active_settings.INDIAN_MENU_OPEN:
             if gesture_id == 1:  # Swipe Right -> Next Menu Item
@@ -126,6 +127,10 @@ class EventHandler:
         action_name = active_settings.GESTURE_MAP.get(gesture_id, "")
         if action_name == "open_indian_menu":
             self.open_indian_menu(service)
+            return True
+        elif action_name == "toggle_screen_curtain":
+            import screen_reader
+            screen_reader.toggle_screen_curtain(service)
             return True
         elif action_name == "focus_next":
             return service.performFocusNext()

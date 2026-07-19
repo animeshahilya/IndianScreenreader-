@@ -16,6 +16,9 @@ class ScreenReaderSettings:
         self.HAPTIC_FEEDBACK_ENABLED = True
         self.HAPTIC_VIBRATION_MS = 30
 
+        # Privacy Features
+        self.SCREEN_CURTAIN_ENABLED = False  # Screen Curtain (blacks out screen display for privacy)
+
         # NVDA Features
         self.INPUT_HELP_MODE = False  # Practice mode: speaks gesture name instead of executing
         self.PUNCTUATION_VERBOSITY = "all"  # "all", "some", "none"
@@ -32,7 +35,8 @@ class ScreenReaderSettings:
             "5. Toggle Input Help Practice Mode",
             "6. Cycle Navigation Granularity",
             "7. Toggle Punctuation Verbosity",
-            "8. Close Indian Menu"
+            "8. Toggle Screen Curtain (Privacy)",
+            "9. Close Indian Menu"
         ]
 
         # Google AI Studio Gemini Integration

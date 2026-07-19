@@ -25,6 +25,19 @@ def close_indian_menu(service):
     event_handler_instance.close_indian_menu(service)
 
 
+def toggle_screen_curtain(service):
+    """Privacy Feature: Toggles Screen Curtain (blacks out screen display for privacy)."""
+    settings.active_settings.SCREEN_CURTAIN_ENABLED = not settings.active_settings.SCREEN_CURTAIN_ENABLED
+    state = settings.active_settings.SCREEN_CURTAIN_ENABLED
+    
+    # Notify Kotlin service to toggle overlay view
+    if hasattr(service, "setScreenCurtainEnabled"):
+        service.setScreenCurtainEnabled(state)
+        
+    msg = "Screen curtain ON. Screen display is hidden for privacy." if state else "Screen curtain OFF. Screen display is visible."
+    service.speak(msg)
+
+
 def toggle_input_help(service):
     """NVDA Feature: Toggles Input Help (Practice Mode)."""
     settings.active_settings.INPUT_HELP_MODE = not settings.active_settings.INPUT_HELP_MODE
