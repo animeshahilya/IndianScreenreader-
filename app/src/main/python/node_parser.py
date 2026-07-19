@@ -29,42 +29,43 @@ CLASS_ROLE_MAP = {
     "androidx.viewpager.widget.ViewPager": "Page view",
 }
 
-PUNCTUATION_MAP_ALL = {
-    ".": " period ",
-    ",": " comma ",
-    ":": " colon ",
-    ";": " semicolon ",
-    "?": " question mark ",
-    "!": " exclamation mark ",
-    "/": " slash ",
-    "\\": " backslash ",
-    "@": " at sign ",
-    "#": " hash ",
-    "$": " dollar ",
-    "%": " percent ",
-    "-": " dash ",
-    "_": " underscore ",
-    "+": " plus ",
-    "=": " equals ",
-    "*": " star ",
-    "&": " ampersand ",
-    "(": " open paren ",
-    ")": " close paren ",
-}
+# Pre-formatted replacement tuples for ultra-fast punctuation expansion
+PUNCTUATION_TUPLES_ALL = (
+    (".", " period "),
+    (",", " comma "),
+    (":", " colon "),
+    (";", " semicolon "),
+    ("?", " question mark "),
+    ("!", " exclamation mark "),
+    ("/", " slash "),
+    ("\\", " backslash "),
+    ("@", " at sign "),
+    ("#", " hash "),
+    ("$", " dollar "),
+    ("%", " percent "),
+    ("-", " dash "),
+    ("_", " underscore "),
+    ("+", " plus "),
+    ("=", " equals "),
+    ("*", " star "),
+    ("&", " ampersand "),
+    ("(", " open paren "),
+    (")", " close paren "),
+)
 
-PUNCTUATION_MAP_SOME = {
-    "@": " at sign ",
-    "#": " hash ",
-    "$": " dollar ",
-    "%": " percent ",
-    "/": " slash ",
-    "\\": " backslash ",
-    "+": " plus ",
-    "=": " equals ",
-}
+PUNCTUATION_TUPLES_SOME = (
+    ("@", " at sign "),
+    ("#", " hash "),
+    ("$", " dollar "),
+    ("%", " percent "),
+    ("/", " slash "),
+    ("\\", " backslash "),
+    ("+", " plus "),
+    ("=", " equals "),
+)
 
 
-@functools.lru_cache(maxsize=128)
+@functools.lru_cache(maxsize=256)
 def get_role_by_class_name(class_name):
     """Fast LRU cached lookup for view class roles."""
     if not class_name:
@@ -73,12 +74,12 @@ def get_role_by_class_name(class_name):
 
 
 def apply_punctuation_verbosity(text, mode):
-    """Expands punctuation symbols into spoken words based on NVDA verbosity level."""
+    """Expands punctuation symbols into spoken words using pre-compiled replacement tuples."""
     if not text or mode == "none":
         return text
 
-    punct_map = PUNCTUATION_MAP_ALL if mode == "all" else PUNCTUATION_MAP_SOME
-    for char, spoken in punct_map.items():
+    tuples = PUNCTUATION_TUPLES_ALL if mode == "all" else PUNCTUATION_TUPLES_SOME
+    for char, spoken in tuples:
         if char in text:
             text = text.replace(char, spoken)
     return " ".join(text.split())
@@ -106,7 +107,6 @@ def get_role_description(node):
 
 
 def is_heading(node):
-    """Checks if node is an accessibility heading or title."""
     if node is None:
         return False
 
@@ -121,7 +121,6 @@ def is_heading(node):
 
 
 def is_control(node):
-    """Checks if node is an interactive control (button, checkbox, switch, input)."""
     if node is None:
         return False
 
@@ -139,7 +138,6 @@ def is_control(node):
 
 
 def get_state_description(node):
-    """Returns spoken state information like checked, selected, disabled, or password."""
     if node is None:
         return []
 
@@ -168,7 +166,6 @@ def get_state_description(node):
 
 
 def get_grid_or_list_position(node, settings):
-    """Parses collection info for Grid row/column or List item count announcements."""
     if node is None:
         return []
 
@@ -195,7 +192,6 @@ def get_grid_or_list_position(node, settings):
 
 
 def get_view_id_resource_name(node, settings):
-    """Extracts developer resource view ID name if enabled."""
     if settings.ANNOUNCE_VIEW_IDS and hasattr(node, "getViewIdResourceName"):
         res_name = node.getViewIdResourceName()
         if res_name:
@@ -205,7 +201,6 @@ def get_view_id_resource_name(node, settings):
 
 
 def get_node_raw_text(node):
-    """Extracts raw text, content description, hint, or error message from a node."""
     if node is None:
         return ""
 
@@ -258,7 +253,6 @@ def get_characters(text):
 
 
 def format_node_speech(node, settings):
-    """Combines text, role, state, grid position, and view ID into a clean spoken phrase."""
     if node is None:
         return ""
 

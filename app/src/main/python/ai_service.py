@@ -5,6 +5,12 @@ import threading
 import urllib.request
 from settings import active_settings
 
+# Pre-compiled script detection regular expressions for speed
+RE_DEVANAGARI = re.compile(r"[\u0900-\u097F]")
+RE_TAMIL = re.compile(r"[\u0B80-\u0BFF]")
+RE_TELUGU = re.compile(r"[\u0C00-\u0C7F]")
+RE_BENGALI = re.compile(r"[\u0980-\u09FF]")
+
 
 class GeminiAIService:
 
@@ -17,21 +23,17 @@ class GeminiAIService:
         return getattr(active_settings, "GEMINI_API_KEY", "").strip()
 
     def detect_script_language(self, text):
-        """Detects script type (Devanagari/Hindi, Tamil, Telugu, Bengali, Latin/English)."""
+        """Ultra-fast compiled script language detection."""
         if not text:
             return "en"
 
-        # Devanagari Unicode Range (\u0900-\u097F)
-        if re.search(r"[\u0900-\u097F]", text):
+        if RE_DEVANAGARI.search(text):
             return "hi"
-        # Tamil Unicode Range (\u0B80-\u0BFF)
-        elif re.search(r"[\u0B80-\u0BFF]", text):
+        elif RE_TAMIL.search(text):
             return "ta"
-        # Telugu Unicode Range (\u0C00-\u0C7F)
-        elif re.search(r"[\u0C00-\u0C7F]", text):
+        elif RE_TELUGU.search(text):
             return "te"
-        # Bengali Unicode Range (\u0980-\u09FF)
-        elif re.search(r"[\u0980-\u09FF]", text):
+        elif RE_BENGALI.search(text):
             return "bn"
 
         return "en"
@@ -70,7 +72,6 @@ class GeminiAIService:
                 method="POST"
             )
 
-            # Strict 5-second timeout for responsiveness
             with urllib.request.urlopen(req, timeout=5) as response:
                 res_body = response.read().decode("utf-8")
                 res_json = json.loads(res_body)
@@ -85,7 +86,7 @@ class GeminiAIService:
 
         except Exception as e:
             print(f"Error calling Gemini API: {e}", file=sys.stderr)
-            return f"AI Service unavailable."
+            return "AI Service unavailable."
 
     def summarize_screen_async(self, screen_text, callback):
         """Asynchronously summarizes screen text without blocking UI or Accessibility loops."""
