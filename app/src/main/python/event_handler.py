@@ -116,47 +116,62 @@ class EventHandler:
             print(f"Error processing accessibility event: {e}", file=sys.stderr)
 
     def handle_gesture(self, service, gesture_id):
-        """Processes gesture IDs and dispatches corresponding navigation actions."""
+        """Processes gesture IDs and dispatches custom mapped actions."""
         try:
+            action_name = active_settings.GESTURE_MAP.get(gesture_id, "")
+
             # NVDA Input Help Mode (Practice Mode)
             if active_settings.INPUT_HELP_MODE:
-                gesture_help_map = {
-                    1: "Swipe Right: Focus Next Element",
-                    2: "Swipe Left: Focus Previous Element",
-                    3: "Swipe Up: Cycle Granularity Up",
-                    4: "Swipe Down: Cycle Granularity Down",
-                    17: "Double Tap: Activate or Click Element",
-                }
-                help_text = gesture_help_map.get(
-                    gesture_id, f"Gesture {gesture_id}: Perform action"
-                )
+                action_desc = action_name.replace("_", " ").title() if action_name else f"Gesture {gesture_id}"
                 if hasattr(service, "speak"):
-                    service.speak(f"Input Help: {help_text}")
+                    service.speak(f"Input Help: Gesture {gesture_id} performs {action_desc}")
                 return True
 
-            # Gesture 1: SWIPE_RIGHT (Forward navigation)
-            if gesture_id == 1:
+            # Dispatch mapped custom action
+            if action_name == "focus_next":
                 return self.navigate_forward(service)
-
-            # Gesture 2: SWIPE_LEFT (Backward navigation)
-            elif gesture_id == 2:
+            elif action_name == "focus_prev":
                 return self.navigate_backward(service)
-
-            # Gesture 3: SWIPE_UP (Cycle Granularity Up)
-            elif gesture_id == 3:
+            elif action_name == "cycle_granularity_up":
                 self.cycle_granularity(service, delta=1)
                 return True
-
-            # Gesture 4: SWIPE_DOWN (Cycle Granularity Down)
-            elif gesture_id == 4:
+            elif action_name == "cycle_granularity_down":
                 self.cycle_granularity(service, delta=-1)
                 return True
-
-            # Gesture 17: DOUBLE_TAP (Activate / Click)
-            elif gesture_id == 17:
+            elif action_name == "click":
                 if hasattr(service, "performNodeClick"):
                     service.performNodeClick()
                 return True
+            elif action_name == "long_click":
+                if hasattr(service, "performNodeLongClick"):
+                    service.performNodeLongClick()
+                return True
+            elif action_name == "ai_summarize":
+                from screen_reader import ai_summarize_screen
+                ai_summarize_screen(service)
+                return True
+            elif action_name == "read_status":
+                from screen_reader import read_device_status
+                read_device_status(service)
+                return True
+            elif action_name == "toggle_input_help":
+                from screen_reader import toggle_input_help
+                toggle_input_help(service)
+                return True
+            elif action_name == "global_back" and hasattr(service, "performGlobalBack"):
+                return service.performGlobalBack()
+            elif action_name == "global_home" and hasattr(service, "performGlobalHome"):
+                return service.performGlobalHome()
+            elif action_name == "global_recents" and hasattr(service, "performGlobalRecents"):
+                return service.performGlobalRecents()
+            elif action_name == "global_notifications" and hasattr(service, "performGlobalNotifications"):
+                return service.performGlobalNotifications()
+
+            # Fallback gesture defaults
+            if gesture_id == 1:
+                return self.navigate_forward(service)
+            elif gesture_id == 2:
+                return self.navigate_backward(service)
 
         except Exception as e:
             print(f"Error handling gesture {gesture_id}: {e}", file=sys.stderr)
@@ -164,7 +179,7 @@ class EventHandler:
         return False
 
     def cycle_granularity(self, service, delta):
-        """Cycles through navigation granularities (Default -> Control -> Heading -> Word -> Character)."""
+        """Cycles through navigation granularities."""
         granularities = active_settings.GRANULARITIES
         self.current_granularity_index = (
             self.current_granularity_index + delta

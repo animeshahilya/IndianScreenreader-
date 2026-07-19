@@ -157,6 +157,46 @@ def get_state_description(node):
     return states
 
 
+def get_grid_or_list_position(node, settings):
+    """Parses collection info for Grid row/column or List item count announcements."""
+    if node is None:
+        return []
+
+    positions = []
+
+    # Grid / Table item position
+    if settings.ANNOUNCE_GRID_POSITION and hasattr(node, "getCollectionItemInfo"):
+        item_info = node.getCollectionItemInfo()
+        if item_info:
+            row = getattr(item_info, "getRowIndex", lambda: -1)()
+            col = getattr(item_info, "getColumnIndex", lambda: -1)()
+            if row >= 0 and col >= 0:
+                positions.append(f"Row {row + 1}, Column {col + 1}")
+            elif row >= 0:
+                positions.append(f"Row {row + 1}")
+
+    # List total item count
+    if settings.ANNOUNCE_LIST_COUNT and hasattr(node, "getCollectionInfo"):
+        collection_info = node.getCollectionInfo()
+        if collection_info:
+            count = getattr(collection_info, "getItemCount", lambda: -1)()
+            if count > 0:
+                positions.append(f"List with {count} items")
+
+    return positions
+
+
+def get_view_id_resource_name(node, settings):
+    """Extracts developer resource view ID name if enabled."""
+    if settings.ANNOUNCE_VIEW_IDS and hasattr(node, "getViewIdResourceName"):
+        res_name = node.getViewIdResourceName()
+        if res_name:
+            # e.g., "com.app:id/btn_submit" -> "ID: btn_submit"
+            short_id = res_name.split("/")[-1] if "/" in res_name else res_name
+            return f"ID: {short_id}"
+    return ""
+
+
 def get_node_raw_text(node):
     """Extracts raw text, content description, hint, or error message from a node."""
     if node is None:
@@ -204,26 +244,29 @@ def get_node_raw_text(node):
 
 
 def get_words(text):
-    """Splits text into words for word-granularity navigation."""
     if not text:
         return []
     return [w for w in text.split() if w]
 
 
 def get_characters(text):
-    """Splits text into characters for character-granularity navigation."""
     if not text:
         return []
     return list(text)
 
 
 def format_node_speech(node, settings):
-    """Combines text, role, and state into a clean spoken phrase based on settings."""
+    """Combines text, role, state, grid position, and view ID into a clean spoken phrase."""
     if node is None:
         return ""
 
+    class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
     raw_text = get_node_raw_text(node)
-    
+
+    # Option to ignore decorative unlabelled images
+    if settings.IGNORE_DECORATIVE_IMAGES and "ImageView" in class_name and not raw_text:
+        return ""
+
     # Optional AI Translation or Simplification pipeline
     if raw_text and getattr(settings, "GEMINI_API_KEY", ""):
         from ai_service import ai_service_instance
@@ -237,6 +280,8 @@ def format_node_speech(node, settings):
     
     role = get_role_description(node) if settings.ANNOUNCE_ELEMENT_TYPES else ""
     states = get_state_description(node) if settings.ANNOUNCE_ELEMENT_STATE else []
+    positions = get_grid_or_list_position(node, settings)
+    view_id = get_view_id_resource_name(node, settings)
 
     parts = []
 
@@ -248,6 +293,12 @@ def format_node_speech(node, settings):
 
     if states:
         parts.extend(states)
+
+    if positions:
+        parts.extend(positions)
+
+    if view_id:
+        parts.append(view_id)
 
     if settings.VERBOSITY_LEVEL == "low":
         return raw_text if raw_text else role

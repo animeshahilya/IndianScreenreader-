@@ -19,6 +19,37 @@ def on_interrupt():
     event_handler_instance.on_interrupt()
 
 
+# --- Custom Gesture Remapping ---
+def remap_gesture(gesture_id, action_name):
+    """Remaps a gesture ID to a custom action name."""
+    active_settings.GESTURE_MAP[int(gesture_id)] = str(action_name).lower().strip()
+
+
+# --- Advanced Customization Setters ---
+def set_announce_grid_position(enabled):
+    active_settings.ANNOUNCE_GRID_POSITION = bool(enabled)
+
+
+def set_announce_list_count(enabled):
+    active_settings.ANNOUNCE_LIST_COUNT = bool(enabled)
+
+
+def set_announce_view_ids(enabled):
+    active_settings.ANNOUNCE_VIEW_IDS = bool(enabled)
+
+
+def set_ignore_decorative_images(enabled):
+    active_settings.IGNORE_DECORATIVE_IMAGES = bool(enabled)
+
+
+def set_audio_beep_volume(volume):
+    active_settings.AUDIO_BEEP_VOLUME = max(0, min(100, int(volume)))
+
+
+def set_haptic_duration_ms(ms):
+    active_settings.HAPTIC_DURATION_MS = max(0, min(500, int(ms)))
+
+
 # --- Standard Option Setters ---
 def set_verbosity(level):
     if level in ["high", "medium", "low"]:
@@ -43,7 +74,6 @@ def set_filter_duplicates(enabled):
 
 # --- NVDA Specific Options ---
 def toggle_input_help(service):
-    """Toggles NVDA Input Help Mode (Practice Mode) ON or OFF."""
     active_settings.INPUT_HELP_MODE = not active_settings.INPUT_HELP_MODE
     status = "ON" if active_settings.INPUT_HELP_MODE else "OFF"
     msg = f"Input Help {status}"
@@ -53,19 +83,16 @@ def toggle_input_help(service):
 
 
 def set_punctuation_verbosity(level):
-    """Sets punctuation verbosity mode: 'none', 'some', 'all'."""
     if level in ["none", "some", "all"]:
         active_settings.PUNCTUATION_VERBOSITY = level
 
 
 def set_capitalization_mode(mode):
-    """Sets capitalization mode: 'prefix' ('Cap A'), 'pitch', 'none'."""
     if mode in ["prefix", "pitch", "none"]:
         active_settings.ANNOUNCE_CAPITALIZATION = mode
 
 
 def set_speech_rate(service, rate):
-    """Dynamically adjusts TTS speech rate (0.5 to 2.0)."""
     try:
         r = float(rate)
         active_settings.SPEECH_RATE = r
@@ -76,7 +103,6 @@ def set_speech_rate(service, rate):
 
 
 def set_speech_pitch(service, pitch):
-    """Dynamically adjusts TTS speech pitch (0.5 to 2.0)."""
     try:
         p = float(pitch)
         active_settings.SPEECH_PITCH = p
@@ -87,7 +113,6 @@ def set_speech_pitch(service, pitch):
 
 
 def read_device_status(service):
-    """Queries device status (battery, time, network) and speaks it."""
     if hasattr(service, "getDeviceStatusString"):
         status_str = service.getDeviceStatusString()
         if status_str and hasattr(service, "speak"):
@@ -98,17 +123,14 @@ def read_device_status(service):
 
 # --- AI Studio Gemini API Features ---
 def set_gemini_api_key(key):
-    """Sets Google AI Studio Gemini API Key."""
     active_settings.GEMINI_API_KEY = str(key).strip()
 
 
 def set_translation_target_language(language):
-    """Sets target language for AI Translation (e.g. 'Hindi', 'Tamil', 'Telugu', 'Bengali', 'English')."""
     active_settings.TRANSLATION_TARGET_LANGUAGE = str(language).strip()
 
 
 def toggle_auto_translate(service=None):
-    """Toggles AI Auto-Translation ON or OFF."""
     active_settings.AUTO_TRANSLATE_ENABLED = not active_settings.AUTO_TRANSLATE_ENABLED
     status = "ON" if active_settings.AUTO_TRANSLATE_ENABLED else "OFF"
     msg = f"AI Auto Translation {status} ({active_settings.TRANSLATION_TARGET_LANGUAGE})"
@@ -118,7 +140,6 @@ def toggle_auto_translate(service=None):
 
 
 def toggle_text_simplification(service=None):
-    """Toggles AI Text Simplification ON or OFF."""
     active_settings.SIMPLIFY_TEXT_ENABLED = not active_settings.SIMPLIFY_TEXT_ENABLED
     status = "ON" if active_settings.SIMPLIFY_TEXT_ENABLED else "OFF"
     msg = f"AI Text Simplification {status}"
@@ -128,7 +149,6 @@ def toggle_text_simplification(service=None):
 
 
 def ai_summarize_screen(service):
-    """Summarizes current screen text using Gemini API."""
     if hasattr(service, "getRootInActiveWindow"):
         root = service.getRootInActiveWindow()
         if root:
@@ -142,7 +162,6 @@ def ai_summarize_screen(service):
 
 
 def ai_translate_text(service, text, target_language="Hindi"):
-    """Translates arbitrary text into target_language using Gemini API."""
     translated = ai_service_instance.translate_text(text, target_language)
     if hasattr(service, "speak"):
         service.speak(translated)
@@ -150,7 +169,6 @@ def ai_translate_text(service, text, target_language="Hindi"):
 
 
 def ai_rewrite_simplified(service, text):
-    """Simplifies complex text into easy language using Gemini API."""
     simplified = ai_service_instance.rewrite_simplified(text)
     if hasattr(service, "speak"):
         service.speak(simplified)
@@ -158,7 +176,6 @@ def ai_rewrite_simplified(service, text):
 
 
 def ai_describe_image_b64(service, base64_image):
-    """Describes an image using Gemini Vision API."""
     description = ai_service_instance.describe_image_b64(base64_image)
     if hasattr(service, "speak"):
         service.speak(f"AI Image Description: {description}")
@@ -166,7 +183,6 @@ def ai_describe_image_b64(service, base64_image):
 
 
 def perform_global_action(service, action_name):
-    """Dispatches global shortcuts: 'back', 'home', 'recents', 'notifications', 'quick_settings'."""
     action_name = str(action_name).lower()
     if action_name == "back" and hasattr(service, "performGlobalBack"):
         return service.performGlobalBack()
