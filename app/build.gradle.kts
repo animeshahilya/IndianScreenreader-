@@ -41,7 +41,6 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.8"
-        buildPython("python") // ensure python is on path, otherwise use absolute path
     }
 }
 
