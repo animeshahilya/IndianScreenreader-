@@ -5,6 +5,7 @@ from node_parser import (
     get_node_raw_text,
     get_words,
     get_characters,
+    format_capitalization,
     is_heading,
     is_control,
 )
@@ -117,6 +118,22 @@ class EventHandler:
     def handle_gesture(self, service, gesture_id):
         """Processes gesture IDs and dispatches corresponding navigation actions."""
         try:
+            # NVDA Input Help Mode (Practice Mode)
+            if active_settings.INPUT_HELP_MODE:
+                gesture_help_map = {
+                    1: "Swipe Right: Focus Next Element",
+                    2: "Swipe Left: Focus Previous Element",
+                    3: "Swipe Up: Cycle Granularity Up",
+                    4: "Swipe Down: Cycle Granularity Down",
+                    17: "Double Tap: Activate or Click Element",
+                }
+                help_text = gesture_help_map.get(
+                    gesture_id, f"Gesture {gesture_id}: Perform action"
+                )
+                if hasattr(service, "speak"):
+                    service.speak(f"Input Help: {help_text}")
+                return True
+
             # Gesture 1: SWIPE_RIGHT (Forward navigation)
             if gesture_id == 1:
                 return self.navigate_forward(service)
@@ -182,8 +199,11 @@ class EventHandler:
             if chars and self.granular_text_index < len(chars):
                 char = chars[self.granular_text_index]
                 self.granular_text_index += 1
+                char_speech = format_capitalization(
+                    char, active_settings.ANNOUNCE_CAPITALIZATION
+                )
                 if hasattr(service, "speak"):
-                    service.speak(char)
+                    service.speak(char_speech)
                 return True
 
         return False
@@ -209,8 +229,11 @@ class EventHandler:
             if chars and self.granular_text_index > 0:
                 self.granular_text_index -= 1
                 char = chars[self.granular_text_index]
+                char_speech = format_capitalization(
+                    char, active_settings.ANNOUNCE_CAPITALIZATION
+                )
                 if hasattr(service, "speak"):
-                    service.speak(char)
+                    service.speak(char_speech)
                 return True
 
         return False

@@ -27,6 +27,64 @@ CLASS_ROLE_MAP = {
     "androidx.viewpager.widget.ViewPager": "Page view",
 }
 
+PUNCTUATION_MAP_ALL = {
+    ".": " period ",
+    ",": " comma ",
+    ":": " colon ",
+    ";": " semicolon ",
+    "?": " question mark ",
+    "!": " exclamation mark ",
+    "/": " slash ",
+    "\\": " backslash ",
+    "@": " at sign ",
+    "#": " hash ",
+    "$": " dollar ",
+    "%": " percent ",
+    "-": " dash ",
+    "_": " underscore ",
+    "+": " plus ",
+    "=": " equals ",
+    "*": " star ",
+    "&": " ampersand ",
+    "(": " open paren ",
+    ")": " close paren ",
+}
+
+PUNCTUATION_MAP_SOME = {
+    "@": " at sign ",
+    "#": " hash ",
+    "$": " dollar ",
+    "%": " percent ",
+    "/": " slash ",
+    "\\": " backslash ",
+    "+": " plus ",
+    "=": " equals ",
+}
+
+
+def apply_punctuation_verbosity(text, mode):
+    """Expands punctuation symbols into spoken words based on NVDA verbosity level."""
+    if not text or mode == "none":
+        return text
+
+    punct_map = PUNCTUATION_MAP_ALL if mode == "all" else PUNCTUATION_MAP_SOME
+    for char, spoken in punct_map.items():
+        if char in text:
+            text = text.replace(char, spoken)
+    return " ".join(text.split())
+
+
+def format_capitalization(text, mode):
+    """Applies NVDA capitalization formatting (e.g. 'Cap A')."""
+    if not text or mode == "none":
+        return text
+
+    if len(text) == 1 and text.isupper():
+        if mode == "prefix":
+            return f"Cap {text}"
+
+    return text
+
 
 def get_role_description(node):
     """Maps Android view class names to friendly spoken roles."""
@@ -165,6 +223,8 @@ def format_node_speech(node, settings):
         return ""
 
     raw_text = get_node_raw_text(node)
+    raw_text = apply_punctuation_verbosity(raw_text, settings.PUNCTUATION_VERBOSITY)
+    
     role = get_role_description(node) if settings.ANNOUNCE_ELEMENT_TYPES else ""
     states = get_state_description(node) if settings.ANNOUNCE_ELEMENT_STATE else []
 

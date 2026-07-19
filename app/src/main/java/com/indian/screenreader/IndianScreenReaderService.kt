@@ -2,8 +2,11 @@ package com.indian.screenreader
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.BatteryManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -15,6 +18,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener {
@@ -81,6 +86,18 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    fun setSpeechRate(rate: Float) {
+        if (ttsInitialized) {
+            tts?.setSpeechRate(rate)
+        }
+    }
+
+    fun setPitch(pitch: Float) {
+        if (ttsInitialized) {
+            tts?.setPitch(pitch)
+        }
+    }
+
     fun playAudioBeep(toneType: Int = ToneGenerator.TONE_PROP_BEEP) {
         try {
             toneGenerator?.startTone(toneType, 50)
@@ -101,6 +118,24 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error triggering vibration", e)
+        }
+    }
+
+    // NVDA Device Status helper
+    fun getDeviceStatusString(): String {
+        return try {
+            val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+            val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatus = registerReceiver(null, batteryFilter)
+            val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val batteryPct = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
+            
+            val batteryInfo = if (batteryPct >= 0) "Battery $batteryPct percent" else ""
+            "$timeStr, $batteryInfo".trim(' ', ',')
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching device status", e)
+            "Status unavailable"
         }
     }
 
@@ -157,7 +192,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         if (result) {
             playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
         } else {
-            // Reached boundary edge
             playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
             speak("End of screen")
         }

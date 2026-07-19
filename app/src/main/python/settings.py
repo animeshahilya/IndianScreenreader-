@@ -33,6 +33,20 @@ class Settings:
     # Event Throttling (ms) for scroll & rapid UI state debouncing
     EVENT_THROTTLE_MS = 40
 
+    # --- NVDA Features ---
+    # Input Help Mode (Practice Mode: announces gesture names without executing them)
+    INPUT_HELP_MODE = False
+
+    # Punctuation Verbosity: 'none', 'some', 'all'
+    PUNCTUATION_VERBOSITY = "none"
+
+    # Capitalization Announcement: 'prefix' ("Cap A"), 'pitch', 'none'
+    ANNOUNCE_CAPITALIZATION = "prefix"
+
+    # Dynamic Speech Rate (0.5 to 2.0) & Pitch (0.5 to 2.0)
+    SPEECH_RATE = 1.0
+    SPEECH_PITCH = 1.0
+
 
 # Global active settings instance
 active_settings = Settings()
