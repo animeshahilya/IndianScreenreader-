@@ -1,5 +1,13 @@
 import sys
-from node_parser import format_node_speech, get_node_raw_text
+import time
+from node_parser import (
+    format_node_speech,
+    get_node_raw_text,
+    get_words,
+    get_characters,
+    is_heading,
+    is_control,
+)
 from settings import active_settings
 
 
@@ -7,9 +15,24 @@ class EventHandler:
 
     def __init__(self):
         self.last_spoken_text = ""
+        self.last_event_time_ms = 0
+        self.current_granularity_index = 0
+        self.granular_text_index = 0
+        self.current_node_text = ""
+
+    def is_throttled(self):
+        """Returns True if events are arriving faster than EVENT_THROTTLE_MS."""
+        now = time.time() * 1000
+        if (now - self.last_event_time_ms) < active_settings.EVENT_THROTTLE_MS:
+            return True
+        self.last_event_time_ms = now
+        return False
 
     def process_event(self, service, event):
         if event is None:
+            return
+
+        if self.is_throttled():
             return
 
         try:
@@ -17,7 +40,7 @@ class EventHandler:
 
             event_type = event.getEventType()
 
-            # Handle focus, hover (touch exploration), or click
+            # Focus, Hover, Click events
             if (
                 event_type == AccessibilityEvent.TYPE_VIEW_FOCUSED
                 or event_type == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER
@@ -35,10 +58,13 @@ class EventHandler:
                         ):
                             service.speak(speech_text)
                             self.last_spoken_text = speech_text
+                            self.current_node_text = get_node_raw_text(node)
+                            self.granular_text_index = 0
 
-                    node.recycle()
+                    if hasattr(node, "recycle"):
+                        node.recycle()
 
-            # Handle window state changes (app/dialog transitions)
+            # Window state changes
             elif (
                 event_type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                 and active_settings.READ_WINDOW_CHANGES
@@ -55,9 +81,10 @@ class EventHandler:
                         ):
                             service.speak(announcement)
                             self.last_spoken_text = announcement
-                    node.recycle()
+                    if hasattr(node, "recycle"):
+                        node.recycle()
 
-            # Handle text changes (e.g. typing in edit fields)
+            # Text changes in edit controls
             elif event_type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED:
                 node = event.getSource()
                 if node:
@@ -65,10 +92,112 @@ class EventHandler:
                     if text and text.strip():
                         service.speak(text)
                         self.last_spoken_text = text
-                    node.recycle()
+                    if hasattr(node, "recycle"):
+                        node.recycle()
 
         except Exception as e:
             print(f"Error processing accessibility event: {e}", file=sys.stderr)
+
+    def handle_gesture(self, service, gesture_id):
+        """Processes gesture IDs and dispatches corresponding navigation actions."""
+        try:
+            # Gesture 1: SWIPE_RIGHT (Forward navigation)
+            if gesture_id == 1:
+                return self.navigate_forward(service)
+
+            # Gesture 2: SWIPE_LEFT (Backward navigation)
+            elif gesture_id == 2:
+                return self.navigate_backward(service)
+
+            # Gesture 3: SWIPE_UP (Cycle Granularity Up)
+            elif gesture_id == 3:
+                self.cycle_granularity(service, delta=1)
+                return True
+
+            # Gesture 4: SWIPE_DOWN (Cycle Granularity Down)
+            elif gesture_id == 4:
+                self.cycle_granularity(service, delta=-1)
+                return True
+
+            # Gesture 17: DOUBLE_TAP (Activate / Click)
+            elif gesture_id == 17:
+                if hasattr(service, "performNodeClick"):
+                    service.performNodeClick()
+                return True
+
+        except Exception as e:
+            print(f"Error handling gesture {gesture_id}: {e}", file=sys.stderr)
+
+        return False
+
+    def cycle_granularity(self, service, delta):
+        """Cycles through navigation granularities (Default -> Control -> Heading -> Word -> Character)."""
+        granularities = active_settings.GRANULARITIES
+        self.current_granularity_index = (
+            self.current_granularity_index + delta
+        ) % len(granularities)
+        active_settings.CURRENT_GRANULARITY_INDEX = self.current_granularity_index
+        mode_name = granularities[self.current_granularity_index].capitalize()
+
+        if hasattr(service, "speak"):
+            service.speak(f"Navigation: {mode_name}")
+
+    def get_current_granularity(self):
+        return active_settings.GRANULARITIES[self.current_granularity_index]
+
+    def navigate_forward(self, service):
+        mode = self.get_current_granularity()
+
+        if mode == "default" or mode == "control" or mode == "heading":
+            if hasattr(service, "performFocusNext"):
+                return service.performFocusNext()
+
+        elif mode == "word":
+            words = get_words(self.current_node_text)
+            if words and self.granular_text_index < len(words):
+                word = words[self.granular_text_index]
+                self.granular_text_index += 1
+                if hasattr(service, "speak"):
+                    service.speak(word)
+                return True
+
+        elif mode == "character":
+            chars = get_characters(self.current_node_text)
+            if chars and self.granular_text_index < len(chars):
+                char = chars[self.granular_text_index]
+                self.granular_text_index += 1
+                if hasattr(service, "speak"):
+                    service.speak(char)
+                return True
+
+        return False
+
+    def navigate_backward(self, service):
+        mode = self.get_current_granularity()
+
+        if mode == "default" or mode == "control" or mode == "heading":
+            if hasattr(service, "performFocusPrevious"):
+                return service.performFocusPrevious()
+
+        elif mode == "word":
+            words = get_words(self.current_node_text)
+            if words and self.granular_text_index > 0:
+                self.granular_text_index -= 1
+                word = words[self.granular_text_index]
+                if hasattr(service, "speak"):
+                    service.speak(word)
+                return True
+
+        elif mode == "character":
+            chars = get_characters(self.current_node_text)
+            if chars and self.granular_text_index > 0:
+                self.granular_text_index -= 1
+                char = chars[self.granular_text_index]
+                if hasattr(service, "speak"):
+                    service.speak(char)
+                return True
+
+        return False
 
     def on_interrupt(self, service=None):
         self.last_spoken_text = ""

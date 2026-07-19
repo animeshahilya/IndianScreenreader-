@@ -8,6 +8,11 @@ def on_accessibility_event(service, event):
     event_handler_instance.process_event(service, event)
 
 
+def on_gesture(service, gesture_id):
+    """Callback invoked when user performs a touch gesture."""
+    return event_handler_instance.handle_gesture(service, gesture_id)
+
+
 def on_interrupt():
     """Callback invoked when speech or service is interrupted."""
     event_handler_instance.on_interrupt()
@@ -37,3 +42,19 @@ def set_read_window_changes(enabled):
 def set_filter_duplicates(enabled):
     """Enable or disable duplicate speech filtering."""
     active_settings.FILTER_DUPLICATE_SPEECH = bool(enabled)
+
+
+def perform_global_action(service, action_name):
+    """Dispatches global shortcuts: 'back', 'home', 'recents', 'notifications', 'quick_settings'."""
+    action_name = str(action_name).lower()
+    if action_name == "back" and hasattr(service, "performGlobalBack"):
+        return service.performGlobalBack()
+    elif action_name == "home" and hasattr(service, "performGlobalHome"):
+        return service.performGlobalHome()
+    elif action_name == "recents" and hasattr(service, "performGlobalRecents"):
+        return service.performGlobalRecents()
+    elif action_name == "notifications" and hasattr(service, "performGlobalNotifications"):
+        return service.performGlobalNotifications()
+    elif action_name == "quick_settings" and hasattr(service, "performGlobalQuickSettings"):
+        return service.performGlobalQuickSettings()
+    return False

@@ -23,8 +23,42 @@ def get_role_description(node):
     if node is None:
         return ""
 
-    class_name = str(node.getClassName()) if node.getClassName() else ""
+    class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
     return CLASS_ROLE_MAP.get(class_name, "")
+
+
+def is_heading(node):
+    """Checks if node is an accessibility heading or title."""
+    if node is None:
+        return False
+
+    if hasattr(node, "isHeading") and node.isHeading():
+        return True
+
+    # Fallback heuristic: check if class is TextView and text is non-empty and non-clickable
+    class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
+    if "TextView" in class_name and hasattr(node, "isClickable") and not node.isClickable():
+        return True
+
+    return False
+
+
+def is_control(node):
+    """Checks if node is an interactive control (button, checkbox, switch, input)."""
+    if node is None:
+        return False
+
+    class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
+    if class_name in CLASS_ROLE_MAP:
+        return True
+
+    if hasattr(node, "isClickable") and node.isClickable():
+        return True
+
+    if hasattr(node, "isCheckable") and node.isCheckable():
+        return True
+
+    return False
 
 
 def get_state_description(node):
@@ -34,22 +68,18 @@ def get_state_description(node):
 
     states = []
 
-    # Password check
     if hasattr(node, "isPassword") and node.isPassword():
         states.append("Password field")
 
-    # Checkable / Checked check
     if hasattr(node, "isCheckable") and node.isCheckable():
         if hasattr(node, "isChecked") and node.isChecked():
             states.append("Checked")
         else:
             states.append("Not checked")
 
-    # Selected check
     if hasattr(node, "isSelected") and node.isSelected():
         states.append("Selected")
 
-    # Enabled / Disabled check
     if hasattr(node, "isEnabled") and not node.isEnabled():
         states.append("Disabled")
 
@@ -62,29 +92,46 @@ def get_node_raw_text(node):
         return ""
 
     # Priority 1: Content Description
-    content_desc = node.getContentDescription()
-    if content_desc:
-        return str(content_desc).strip()
+    if hasattr(node, "getContentDescription"):
+        content_desc = node.getContentDescription()
+        if content_desc:
+            return str(content_desc).strip()
 
     # Priority 2: Text
-    text = node.getText()
-    if text:
-        return str(text).strip()
+    if hasattr(node, "getText"):
+        text = node.getText()
+        if text:
+            return str(text).strip()
 
-    # Priority 3: Fallback to child text if container has text children
+    # Priority 3: Fallback to child text
     if hasattr(node, "getChildCount") and node.getChildCount() > 0:
         child_texts = []
-        for i in range(min(node.getChildCount(), 5)):  # limit to first 5 children for speed
+        for i in range(min(node.getChildCount(), 5)):
             child = node.getChild(i)
             if child:
                 child_text = get_node_raw_text(child)
                 if child_text:
                     child_texts.append(child_text)
-                child.recycle()
+                if hasattr(child, "recycle"):
+                    child.recycle()
         if child_texts:
             return " ".join(child_texts)
 
     return ""
+
+
+def get_words(text):
+    """Splits text into words for word-granularity navigation."""
+    if not text:
+        return []
+    return [w for w in text.split() if w]
+
+
+def get_characters(text):
+    """Splits text into characters for character-granularity navigation."""
+    if not text:
+        return []
+    return list(text)
 
 
 def format_node_speech(node, settings):
@@ -107,7 +154,6 @@ def format_node_speech(node, settings):
     if states:
         parts.extend(states)
 
-    # Low verbosity: return text only if available
     if settings.VERBOSITY_LEVEL == "low":
         return raw_text if raw_text else role
 

@@ -19,11 +19,19 @@ class Settings:
     # Prevent repeating the exact same speech twice in quick succession
     FILTER_DUPLICATE_SPEECH = True
 
-    # Announce container context (e.g., "List item", "Grid item") in high verbosity
-    ANNOUNCE_CONTAINER_CONTEXT = True
+    # Audio & Haptic Feedback Toggles
+    AUDIO_FEEDBACK_ENABLED = True
+    HAPTIC_FEEDBACK_ENABLED = True
 
-    # Speech mode: 'flush' (interrupt ongoing speech) or 'queue' (add to queue)
-    SPEECH_QUEUE_MODE = "flush"
+    # Granular Navigation Modes
+    GRANULARITIES = ["default", "control", "heading", "word", "character"]
+    CURRENT_GRANULARITY_INDEX = 0
+
+    # Continuous Reading State ("Read from top")
+    CONTINUOUS_READING_ACTIVE = False
+
+    # Event Throttling (ms) for scroll & rapid UI state debouncing
+    EVENT_THROTTLE_MS = 40
 
 
 # Global active settings instance
