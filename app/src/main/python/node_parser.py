@@ -74,7 +74,6 @@ def get_role_by_class_name(class_name):
 
 
 def apply_punctuation_verbosity(text, mode):
-    """Expands punctuation symbols into spoken words using pre-compiled replacement tuples."""
     if not text or mode == "none":
         return text
 
@@ -86,7 +85,6 @@ def apply_punctuation_verbosity(text, mode):
 
 
 def format_capitalization(text, mode):
-    """Applies NVDA capitalization formatting (e.g. 'Cap A')."""
     if not text or mode == "none":
         return text
 
@@ -98,7 +96,6 @@ def format_capitalization(text, mode):
 
 
 def get_role_description(node):
-    """Maps Android view class names to friendly spoken roles."""
     if node is None:
         return ""
 
@@ -201,6 +198,7 @@ def get_view_id_resource_name(node, settings):
 
 
 def get_node_raw_text(node):
+    """Combines text, content description, hint, or error message cleanly without skipping attributes."""
     if node is None:
         return ""
 
@@ -209,20 +207,31 @@ def get_node_raw_text(node):
         if err:
             return f"Error: {err}".strip()
 
-    if hasattr(node, "getContentDescription"):
-        content_desc = node.getContentDescription()
-        if content_desc:
-            return str(content_desc).strip()
+    text_parts = []
 
     if hasattr(node, "getText"):
         text = node.getText()
         if text:
-            return str(text).strip()
+            text_str = str(text).strip()
+            if text_str:
+                text_parts.append(text_str)
 
-    if hasattr(node, "getHintText"):
+    if hasattr(node, "getContentDescription"):
+        content_desc = node.getContentDescription()
+        if content_desc:
+            desc_str = str(content_desc).strip()
+            if desc_str and desc_str not in text_parts:
+                text_parts.append(desc_str)
+
+    if hasattr(node, "getHintText") and not text_parts:
         hint = node.getHintText()
         if hint:
-            return str(hint).strip()
+            hint_str = str(hint).strip()
+            if hint_str:
+                text_parts.append(hint_str)
+
+    if text_parts:
+        return ", ".join(text_parts)
 
     if hasattr(node, "getChildCount") and node.getChildCount() > 0:
         child_texts = []
