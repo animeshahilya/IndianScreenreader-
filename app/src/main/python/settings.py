@@ -47,6 +47,12 @@ class Settings:
     SPEECH_RATE = 1.0
     SPEECH_PITCH = 1.0
 
+    # --- AI Studio Gemini API Features ---
+    GEMINI_API_KEY = ""
+    TRANSLATION_TARGET_LANGUAGE = "Hindi"
+    AUTO_TRANSLATE_ENABLED = False
+    SIMPLIFY_TEXT_ENABLED = False
+
 
 # Global active settings instance
 active_settings = Settings()

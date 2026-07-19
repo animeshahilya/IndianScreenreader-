@@ -223,6 +223,16 @@ def format_node_speech(node, settings):
         return ""
 
     raw_text = get_node_raw_text(node)
+    
+    # Optional AI Translation or Simplification pipeline
+    if raw_text and getattr(settings, "GEMINI_API_KEY", ""):
+        from ai_service import ai_service_instance
+        if getattr(settings, "AUTO_TRANSLATE_ENABLED", False):
+            target_lang = getattr(settings, "TRANSLATION_TARGET_LANGUAGE", "Hindi")
+            raw_text = ai_service_instance.translate_text(raw_text, target_lang)
+        elif getattr(settings, "SIMPLIFY_TEXT_ENABLED", False):
+            raw_text = ai_service_instance.rewrite_simplified(raw_text)
+
     raw_text = apply_punctuation_verbosity(raw_text, settings.PUNCTUATION_VERBOSITY)
     
     role = get_role_description(node) if settings.ANNOUNCE_ELEMENT_TYPES else ""

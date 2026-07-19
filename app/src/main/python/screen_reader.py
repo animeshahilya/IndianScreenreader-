@@ -1,6 +1,7 @@
 import sys
 from event_handler import event_handler_instance
 from settings import active_settings
+from ai_service import ai_service_instance
 
 
 def on_accessibility_event(service, event):
@@ -93,6 +94,75 @@ def read_device_status(service):
             service.speak(f"Status: {status_str}")
             return True
     return False
+
+
+# --- AI Studio Gemini API Features ---
+def set_gemini_api_key(key):
+    """Sets Google AI Studio Gemini API Key."""
+    active_settings.GEMINI_API_KEY = str(key).strip()
+
+
+def set_translation_target_language(language):
+    """Sets target language for AI Translation (e.g. 'Hindi', 'Tamil', 'Telugu', 'Bengali', 'English')."""
+    active_settings.TRANSLATION_TARGET_LANGUAGE = str(language).strip()
+
+
+def toggle_auto_translate(service=None):
+    """Toggles AI Auto-Translation ON or OFF."""
+    active_settings.AUTO_TRANSLATE_ENABLED = not active_settings.AUTO_TRANSLATE_ENABLED
+    status = "ON" if active_settings.AUTO_TRANSLATE_ENABLED else "OFF"
+    msg = f"AI Auto Translation {status} ({active_settings.TRANSLATION_TARGET_LANGUAGE})"
+    if service and hasattr(service, "speak"):
+        service.speak(msg)
+    return active_settings.AUTO_TRANSLATE_ENABLED
+
+
+def toggle_text_simplification(service=None):
+    """Toggles AI Text Simplification ON or OFF."""
+    active_settings.SIMPLIFY_TEXT_ENABLED = not active_settings.SIMPLIFY_TEXT_ENABLED
+    status = "ON" if active_settings.SIMPLIFY_TEXT_ENABLED else "OFF"
+    msg = f"AI Text Simplification {status}"
+    if service and hasattr(service, "speak"):
+        service.speak(msg)
+    return active_settings.SIMPLIFY_TEXT_ENABLED
+
+
+def ai_summarize_screen(service):
+    """Summarizes current screen text using Gemini API."""
+    if hasattr(service, "getRootInActiveWindow"):
+        root = service.getRootInActiveWindow()
+        if root:
+            from node_parser import get_node_raw_text
+            screen_text = get_node_raw_text(root)
+            summary = ai_service_instance.summarize_screen(screen_text)
+            if hasattr(service, "speak"):
+                service.speak(f"AI Screen Summary: {summary}")
+            return summary
+    return "Could not retrieve screen text."
+
+
+def ai_translate_text(service, text, target_language="Hindi"):
+    """Translates arbitrary text into target_language using Gemini API."""
+    translated = ai_service_instance.translate_text(text, target_language)
+    if hasattr(service, "speak"):
+        service.speak(translated)
+    return translated
+
+
+def ai_rewrite_simplified(service, text):
+    """Simplifies complex text into easy language using Gemini API."""
+    simplified = ai_service_instance.rewrite_simplified(text)
+    if hasattr(service, "speak"):
+        service.speak(simplified)
+    return simplified
+
+
+def ai_describe_image_b64(service, base64_image):
+    """Describes an image using Gemini Vision API."""
+    description = ai_service_instance.describe_image_b64(base64_image)
+    if hasattr(service, "speak"):
+        service.speak(f"AI Image Description: {description}")
+    return description
 
 
 def perform_global_action(service, action_name):
