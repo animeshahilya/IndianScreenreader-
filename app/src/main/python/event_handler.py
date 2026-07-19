@@ -95,6 +95,22 @@ class EventHandler:
                     if hasattr(node, "recycle"):
                         node.recycle()
 
+            # Scroll position announcements
+            elif event_type == AccessibilityEvent.TYPE_VIEW_SCROLLED:
+                if hasattr(event, "getItemCount") and hasattr(event, "getFromIndex"):
+                    item_count = event.getItemCount()
+                    from_index = event.getFromIndex()
+                    to_index = getattr(event, "getToIndex", lambda: -1)()
+                    if item_count > 0 and from_index >= 0:
+                        if to_index >= from_index:
+                            scroll_msg = f"Items {from_index + 1} to {to_index + 1} of {item_count}"
+                        else:
+                            scroll_msg = f"Item {from_index + 1} of {item_count}"
+
+                        if scroll_msg != self.last_spoken_text:
+                            service.speak(scroll_msg)
+                            self.last_spoken_text = scroll_msg
+
         except Exception as e:
             print(f"Error processing accessibility event: {e}", file=sys.stderr)
 
@@ -148,7 +164,7 @@ class EventHandler:
     def navigate_forward(self, service):
         mode = self.get_current_granularity()
 
-        if mode == "default" or mode == "control" or mode == "heading":
+        if mode in ["default", "control", "heading"]:
             if hasattr(service, "performFocusNext"):
                 return service.performFocusNext()
 
@@ -175,7 +191,7 @@ class EventHandler:
     def navigate_backward(self, service):
         mode = self.get_current_granularity()
 
-        if mode == "default" or mode == "control" or mode == "heading":
+        if mode in ["default", "control", "heading"]:
             if hasattr(service, "performFocusPrevious"):
                 return service.performFocusPrevious()
 

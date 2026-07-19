@@ -1,6 +1,7 @@
 # Helper module for parsing Android AccessibilityNodeInfo objects
 
 CLASS_ROLE_MAP = {
+    # Standard Android Widgets
     "android.widget.Button": "Button",
     "android.widget.ImageButton": "Button",
     "android.widget.CheckBox": "Checkbox",
@@ -9,12 +10,21 @@ CLASS_ROLE_MAP = {
     "android.widget.Switch": "Switch",
     "android.widget.EditText": "Editing box",
     "android.widget.SeekBar": "Slider",
+    "android.widget.RatingBar": "Rating bar",
     "android.widget.ImageView": "Image",
     "android.widget.ProgressBar": "Progress bar",
     "android.widget.Spinner": "Drop down menu",
     "android.widget.ListView": "List",
     "android.widget.GridView": "Grid",
     "android.widget.TabWidget": "Tab bar",
+    # AppCompat Widgets
+    "androidx.appcompat.widget.AppCompatButton": "Button",
+    "androidx.appcompat.widget.AppCompatCheckBox": "Checkbox",
+    "androidx.appcompat.widget.AppCompatRadioButton": "Radio button",
+    "androidx.appcompat.widget.SwitchCompat": "Switch",
+    "androidx.appcompat.widget.AppCompatEditText": "Editing box",
+    "androidx.recyclerview.widget.RecyclerView": "List",
+    "androidx.viewpager.widget.ViewPager": "Page view",
 }
 
 
@@ -35,7 +45,6 @@ def is_heading(node):
     if hasattr(node, "isHeading") and node.isHeading():
         return True
 
-    # Fallback heuristic: check if class is TextView and text is non-empty and non-clickable
     class_name = str(node.getClassName()) if hasattr(node, "getClassName") and node.getClassName() else ""
     if "TextView" in class_name and hasattr(node, "isClickable") and not node.isClickable():
         return True
@@ -69,7 +78,11 @@ def get_state_description(node):
     states = []
 
     if hasattr(node, "isPassword") and node.isPassword():
-        states.append("Password field")
+        text_val = get_node_raw_text(node)
+        if text_val:
+            states.append(f"Password field, {len(text_val)} characters")
+        else:
+            states.append("Password field")
 
     if hasattr(node, "isCheckable") and node.isCheckable():
         if hasattr(node, "isChecked") and node.isChecked():
@@ -87,23 +100,35 @@ def get_state_description(node):
 
 
 def get_node_raw_text(node):
-    """Extracts raw text or content description from a node."""
+    """Extracts raw text, content description, hint, or error message from a node."""
     if node is None:
         return ""
 
-    # Priority 1: Content Description
+    # Priority 1: Error text
+    if hasattr(node, "getError"):
+        err = node.getError()
+        if err:
+            return f"Error: {err}".strip()
+
+    # Priority 2: Content Description
     if hasattr(node, "getContentDescription"):
         content_desc = node.getContentDescription()
         if content_desc:
             return str(content_desc).strip()
 
-    # Priority 2: Text
+    # Priority 3: Text
     if hasattr(node, "getText"):
         text = node.getText()
         if text:
             return str(text).strip()
 
-    # Priority 3: Fallback to child text
+    # Priority 4: Hint Text
+    if hasattr(node, "getHintText"):
+        hint = node.getHintText()
+        if hint:
+            return str(hint).strip()
+
+    # Priority 5: Fallback to child text
     if hasattr(node, "getChildCount") and node.getChildCount() > 0:
         child_texts = []
         for i in range(min(node.getChildCount(), 5)):

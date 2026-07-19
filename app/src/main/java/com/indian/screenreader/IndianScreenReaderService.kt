@@ -1,7 +1,6 @@
 package com.indian.screenreader
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -10,6 +9,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.chaquo.python.PyObject
@@ -104,6 +104,16 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    // Handle physical key events (e.g. Volume keys to interrupt speech)
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                stopSpeech()
+            }
+        }
+        return super.onKeyEvent(event)
+    }
+
     // Gesture Handling
     override fun onGesture(gestureId: Int): Boolean {
         Log.i(TAG, "OnGesture triggered: $gestureId")
@@ -118,7 +128,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
         }
 
-        // Fallback default gesture processing
         return when (gestureId) {
             GESTURE_SWIPE_RIGHT -> {
                 performFocusNext()
@@ -145,7 +154,13 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         } else {
             root.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
         }
-        if (result) playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+        if (result) {
+            playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+        } else {
+            // Reached boundary edge
+            playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
+            speak("End of screen")
+        }
         return result
     }
 
@@ -157,7 +172,12 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         } else {
             false
         }
-        if (result) playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+        if (result) {
+            playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+        } else {
+            playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
+            speak("Start of screen")
+        }
         return result
     }
 
