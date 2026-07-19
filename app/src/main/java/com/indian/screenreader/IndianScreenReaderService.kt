@@ -14,6 +14,7 @@ import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.KeyEvent
+import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.chaquo.python.PyObject
@@ -235,7 +236,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val result = if (focused != null) {
-            focused.focusSearch(AccessibilityNodeInfo.FOCUS_FORWARD)?.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ?: false
+            focused.focusSearch(View.FOCUS_FORWARD)?.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ?: false
         } else {
             root.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
         }
@@ -252,7 +253,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val result = if (focused != null) {
-            focused.focusSearch(AccessibilityNodeInfo.FOCUS_BACKWARD)?.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ?: false
+            focused.focusSearch(View.FOCUS_BACKWARD)?.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ?: false
         } else {
             false
         }
