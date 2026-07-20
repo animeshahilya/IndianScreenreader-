@@ -21,6 +21,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.content.ContextCompat
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -81,28 +82,30 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             Log.e(TAG, "Error initializing audio/vibration/window manager", e)
         }
 
-        // Register Screen ON/OFF Receiver
+        // Register Screen ON/OFF Receiver safely for Android 13+
         try {
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_SCREEN_ON)
             }
-            registerReceiver(screenStateReceiver, filter)
+            ContextCompat.registerReceiver(this, screenStateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         } catch (e: Exception) {
             Log.e(TAG, "Error registering screen state receiver", e)
         }
 
-        // Initialize Chaquopy Python Engine
-        if (!Python.isStarted()) {
-            Python.start(AndroidPlatform(this))
-        }
+        // Initialize Chaquopy Python Engine on background thread
+        executorService.execute {
+            if (!Python.isStarted()) {
+                Python.start(AndroidPlatform(this))
+            }
 
-        val py = Python.getInstance()
-        try {
-            pythonModule = py.getModule("screen_reader")
-            Log.i(TAG, "Loaded Python screen_reader module successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load Python module", e)
+            val py = Python.getInstance()
+            try {
+                pythonModule = py.getModule("screen_reader")
+                Log.i(TAG, "Loaded Python screen_reader module successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load Python module", e)
+            }
         }
     }
 
@@ -258,19 +261,11 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
         }
 
+        // Fallback if Python module fails
         return when (gestureId) {
-            GESTURE_SWIPE_RIGHT -> {
-                performFocusNext()
-                true
-            }
-            GESTURE_SWIPE_LEFT -> {
-                performFocusPrevious()
-                true
-            }
-            GESTURE_DOUBLE_TAP -> {
-                performNodeClick()
-                true
-            }
+            GESTURE_SWIPE_RIGHT -> performFocusNext()
+            GESTURE_SWIPE_LEFT -> performFocusPrevious()
+            GESTURE_DOUBLE_TAP -> performNodeClick()
             else -> super.onGesture(gestureId)
         }
     }
@@ -284,11 +279,17 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val isInteractive = node.isClickable || node.isCheckable || node.isFocusable || node.isHeading
 
         if (hasText || isInteractive) {
-            list.add(node)
+            // We obtain a copy to keep in the list so we can recycle original node's children safely.
+            val nodeCopy = AccessibilityNodeInfo.obtain(node)
+            list.add(nodeCopy)
         }
 
         for (i in 0 until node.childCount) {
-            collectFocusableNodes(node.getChild(i), list)
+            val child = node.getChild(i)
+            if (child != null) {
+                collectFocusableNodes(child, list)
+                child.recycle()
+            }
         }
     }
 
@@ -296,10 +297,11 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val root = rootInActiveWindow ?: return false
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
+        root.recycle()
 
         if (nodes.isEmpty()) return false
 
-        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val currentFocused = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = 0
 
         if (currentFocused != null) {
@@ -309,30 +311,38 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     break
                 }
             }
+            currentFocused.recycle()
         }
 
+        var success = false
         if (targetIndex < nodes.size) {
             val targetNode = nodes[targetIndex]
-            val success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+            success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
             if (success) {
                 playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
             }
-            return success
         } else {
             playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
             speak("End of screen")
-            return false
         }
+
+        // Recycle all collected nodes
+        for (node in nodes) {
+            node.recycle()
+        }
+
+        return success
     }
 
     fun performFocusPrevious(): Boolean {
         val root = rootInActiveWindow ?: return false
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
+        root.recycle()
 
         if (nodes.isEmpty()) return false
 
-        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val currentFocused = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = -1
 
         if (currentFocused != null) {
@@ -342,34 +352,48 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     break
                 }
             }
+            currentFocused.recycle()
         }
 
+        var success = false
         if (targetIndex >= 0 && targetIndex < nodes.size) {
             val targetNode = nodes[targetIndex]
-            val success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+            success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
             if (success) {
                 playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
             }
-            return success
         } else {
             playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
             speak("Start of screen")
-            return false
         }
+
+        // Recycle all collected nodes
+        for (node in nodes) {
+            node.recycle()
+        }
+
+        return success
     }
 
     fun performNodeClick(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) ?: return false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        root.recycle()
+        if (focused == null) return false
         val clicked = focused.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        focused.recycle()
         if (clicked) playAudioBeep(ToneGenerator.TONE_PROP_ACK)
         return clicked
     }
 
     fun performNodeLongClick(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) ?: return false
-        return focused.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        root.recycle()
+        if (focused == null) return false
+        val longClicked = focused.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
+        focused.recycle()
+        return longClicked
     }
 
     fun performGlobalBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
@@ -382,10 +406,20 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         if (!isScreenOn) return
 
         if (pythonModule != null) {
-            try {
-                pythonModule?.callAttr("on_accessibility_event", this, event)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in Python on_accessibility_event", e)
+            // Process on background thread to prevent UI freezing if Python is slow
+            val eventCopy = AccessibilityEvent.obtain(event)
+            executorService.execute {
+                try {
+                    pythonModule?.callAttr("on_accessibility_event", this, eventCopy)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in Python on_accessibility_event", e)
+                } finally {
+                    try {
+                        eventCopy.recycle()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
             }
         }
     }
@@ -394,10 +428,12 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         Log.i(TAG, "Service Interrupted")
         stopSpeech()
         if (pythonModule != null) {
-            try {
-                pythonModule?.callAttr("on_interrupt")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in Python on_interrupt", e)
+            executorService.execute {
+                try {
+                    pythonModule?.callAttr("on_interrupt")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in Python on_interrupt", e)
+                }
             }
         }
     }

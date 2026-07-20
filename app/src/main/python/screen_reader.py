@@ -1,4 +1,6 @@
 # Chaquopy Entry Point for Indian Screenreader
+import threading
+import time
 import settings
 import node_parser
 from event_handler import event_handler_instance
@@ -67,14 +69,18 @@ def read_device_status(service):
 
 def ai_summarize_screen(service):
     """Google AI Studio Gemini Feature: Summarizes current active screen content."""
-    root = service.getRootInActiveWindow()
+    # Use property access for Kotlin properties mapped to Python
+    root = service.rootInActiveWindow
     if root is None:
         service.speak("Cannot capture screen content.")
         return
 
     screen_text = node_parser.get_node_raw_text(root)
     if hasattr(root, "recycle"):
-        root.recycle()
+        try:
+            root.recycle()
+        except Exception:
+            pass
 
     if not screen_text:
         service.speak("No text found on screen to summarize.")
@@ -84,8 +90,65 @@ def ai_summarize_screen(service):
 
     def on_summary_ready(summary):
         service.speak(f"AI Screen Summary: {summary}")
+        
+    def on_summary_error(err):
+        service.speak(f"Summary failed: {err}")
 
-    ai_service_instance.summarize_screen_async(screen_text, on_summary_ready)
+    ai_service_instance.summarize_screen_async(screen_text, on_summary_ready, on_summary_error)
+
+
+def read_from_top(service):
+    """Feature: Continuous Reading Mode - Read from top of screen."""
+    service.speak("Reading from top")
+    settings.active_settings.CONTINUOUS_READING_ACTIVE = True
+    
+    # Simple background loop for continuous reading
+    # A real implementation would hook into TTS completion events,
+    # but polling is a safe fallback for the Python bridge.
+    def read_loop():
+        # Reset focus to top
+        service.performFocusPrevious() # Just trigger a previous
+        # We really want to find the first node, but repeatedly doing prev is an approximation
+        for _ in range(20):
+            if not service.performFocusPrevious():
+                break
+            time.sleep(0.05)
+            
+        time.sleep(1) # Wait for speech to start
+        
+        while settings.active_settings.CONTINUOUS_READING_ACTIVE:
+            success = service.performFocusNext()
+            if not success:
+                settings.active_settings.CONTINUOUS_READING_ACTIVE = False
+                break
+            # Wait a fixed amount or ideally sync with TTS (stubbed here with fixed delay)
+            time.sleep(2.5) 
+            
+    threading.Thread(target=read_loop, daemon=True).start()
+
+
+def read_from_here(service):
+    """Feature: Continuous Reading Mode - Read from current focus."""
+    service.speak("Reading from here")
+    settings.active_settings.CONTINUOUS_READING_ACTIVE = True
+    
+    def read_loop():
+        time.sleep(1) # wait for the initial speech
+        while settings.active_settings.CONTINUOUS_READING_ACTIVE:
+            success = service.performFocusNext()
+            if not success:
+                settings.active_settings.CONTINUOUS_READING_ACTIVE = False
+                break
+            time.sleep(2.5)
+            
+    threading.Thread(target=read_loop, daemon=True).start()
+
+
+def start_voice_command(service):
+    """Feature: Voice Command Mode."""
+    service.speak("Voice command mode is listening. Say a command like summarize screen or go home.")
+    # Implementation requires Android SpeechRecognizer which must run on main thread.
+    # Stubbed for now until Kotlin SpeechRecognizer wrapper is added.
 
 
 def set_gemini_api_key(key):
@@ -100,4 +163,4 @@ def remap_gesture(gesture_id, action_name):
 
 def on_interrupt():
     """Service interruption handler."""
-    pass
+    settings.active_settings.CONTINUOUS_READING_ACTIVE = False

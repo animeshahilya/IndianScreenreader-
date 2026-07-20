@@ -9,22 +9,19 @@ EVENT_THROTTLE_MS = 40  # Debounce events within 40ms for performance stability
 class EventHandler:
 
     def __init__(self):
-        self.last_event_time_ms = 0
+        self.last_focus_event_time_ms = 0
         self.last_spoken_text = ""
         self.current_granularity_index = 0
 
-    def is_throttled(self):
+    def is_focus_throttled(self):
         now_ms = int(time.time() * 1000)
-        if now_ms - self.last_event_time_ms < EVENT_THROTTLE_MS:
+        if now_ms - self.last_focus_event_time_ms < EVENT_THROTTLE_MS:
             return True
-        self.last_event_time_ms = now_ms
+        self.last_focus_event_time_ms = now_ms
         return False
 
     def process_event(self, service, event):
         """Processes accessibility events with debouncing and deduplication."""
-        if self.is_throttled():
-            return
-
         event_type = event.getEventType()
         source = event.getSource()
 
@@ -32,7 +29,11 @@ class EventHandler:
             return
 
         try:
-            if event_type in (8, 128):  # TYPE_VIEW_FOCUSED, TYPE_VIEW_HOVER_ENTER
+            # 8 = TYPE_VIEW_FOCUSED, 128 = TYPE_VIEW_HOVER_ENTER, 32768 = TYPE_VIEW_ACCESSIBILITY_FOCUSED
+            if event_type in (8, 128, 32768):
+                if self.is_focus_throttled():
+                    return
+
                 spoken_text = node_parser.format_node_speech(source, active_settings)
 
                 if active_settings.DEDUPLICATE_SPEECH and spoken_text == self.last_spoken_text:
@@ -44,14 +45,19 @@ class EventHandler:
 
             elif event_type == 32:  # TYPE_WINDOW_STATE_CHANGED
                 if active_settings.ANNOUNCE_WINDOW_CHANGES:
+                    # Update active app profile
+                    pkg = str(event.getPackageName()) if event.getPackageName() else ""
+                    active_settings.CURRENT_APP_PACKAGE = pkg
+                    # We could load profile overrides here
+
                     window_text = node_parser.get_node_raw_text(source)
                     if window_text and window_text != self.last_spoken_text:
                         self.last_spoken_text = window_text
                         service.speak(f"Window: {window_text}")
 
         finally:
-            if hasattr(source, "recycle"):
-                source.recycle()
+            pass # Source recycling is handled by the caller or GC now, wait, no, caller gave us a copy!
+            # The Kotlin code currently passes a copy of the event, which we should not recycle here because Python doesn't own the underlying Java object's lifecycle in the same way, but actually, the Kotlin code explicitly recycles the event AFTER calling Python. So we just do nothing here.
 
     # --- INDIAN MENU HANDLER ---
     def open_indian_menu(self, service):
@@ -78,8 +84,9 @@ class EventHandler:
         idx = active_settings.INDIAN_MENU_SELECTED_INDEX
         active_settings.INDIAN_MENU_OPEN = False
 
+        import screen_reader
+
         if idx == 0:  # AI Screen Summary
-            import screen_reader
             screen_reader.ai_summarize_screen(service)
         elif idx == 1:  # AI Language Translation
             active_settings.AUTO_TRANSLATE_ENABLED = not active_settings.AUTO_TRANSLATE_ENABLED
@@ -88,20 +95,22 @@ class EventHandler:
         elif idx == 2:  # AI Image Description
             service.speak("Capturing screen for AI Vision description...")
         elif idx == 3:  # Device Status
-            import screen_reader
             screen_reader.read_device_status(service)
         elif idx == 4:  # Toggle Input Help
-            import screen_reader
             screen_reader.toggle_input_help(service)
         elif idx == 5:  # Granularity Cycle
             self.cycle_granularity(service, 1)
         elif idx == 6:  # Punctuation Verbosity
-            import screen_reader
             screen_reader.toggle_punctuation_verbosity(service)
         elif idx == 7:  # Toggle Screen Curtain
-            import screen_reader
             screen_reader.toggle_screen_curtain(service)
-        elif idx == 8:  # Close Menu
+        elif idx == 8:  # Read From Here
+            screen_reader.read_from_here(service)
+        elif idx == 9:  # Read From Top
+            screen_reader.read_from_top(service)
+        elif idx == 10: # Voice Command Mode
+            screen_reader.start_voice_command(service)
+        elif idx == 11: # Close Menu
             service.speak("Indian Menu closed.")
 
     def handle_gesture(self, service, gesture_id):
@@ -117,6 +126,12 @@ class EventHandler:
                 self.execute_indian_menu_selection(service)
                 return True
 
+        # Stop continuous reading if active and a gesture is made
+        if active_settings.CONTINUOUS_READING_ACTIVE:
+            active_settings.CONTINUOUS_READING_ACTIVE = False
+            service.speak("Stopped reading")
+            return True
+
         # 2. Check NVDA Practice Mode (Input Help)
         if active_settings.INPUT_HELP_MODE:
             action_desc = self.get_gesture_description(gesture_id)
@@ -125,11 +140,13 @@ class EventHandler:
 
         # 3. Custom Gesture Mapping Lookup
         action_name = active_settings.GESTURE_MAP.get(gesture_id, "")
+        
+        import screen_reader
+        
         if action_name == "open_indian_menu":
             self.open_indian_menu(service)
             return True
         elif action_name == "toggle_screen_curtain":
-            import screen_reader
             screen_reader.toggle_screen_curtain(service)
             return True
         elif action_name == "focus_next":
@@ -146,6 +163,15 @@ class EventHandler:
             return service.performNodeClick()
         elif action_name == "long_click":
             return service.performNodeLongClick()
+        elif action_name == "read_from_top":
+            screen_reader.read_from_top(service)
+            return True
+        elif action_name == "read_from_here":
+            screen_reader.read_from_here(service)
+            return True
+        elif action_name == "voice_command":
+            screen_reader.start_voice_command(service)
+            return True
 
         # Fallback to standard gesture routing
         if gesture_id == 1:  # SWIPE_RIGHT
@@ -158,7 +184,7 @@ class EventHandler:
         elif gesture_id == 4:  # SWIPE_DOWN
             self.cycle_granularity(service, -1)
             return True
-        elif gesture_id == 5:  # SWIPE_UP_THEN_RIGHT -> Open Indian Menu
+        elif gesture_id == 9:  # SWIPE_UP_AND_RIGHT -> Open Indian Menu
             self.open_indian_menu(service)
             return True
 
@@ -177,7 +203,10 @@ class EventHandler:
             2: "Focus Previous",
             3: "Granularity Up",
             4: "Granularity Down",
-            5: "Open Indian Context Menu",
+            9: "Open Indian Context Menu",
+            10: "Read From Top",
+            11: "Read From Here",
+            12: "Voice Command Mode",
             17: "Click / Activate Element",
             18: "Long Click Element"
         }

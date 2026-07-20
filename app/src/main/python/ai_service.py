@@ -17,7 +17,8 @@ class GeminiAIService:
     GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     def __init__(self):
-        pass
+        self._lock = threading.Lock()
+        self._is_summarizing = False
 
     def get_api_key(self):
         return getattr(active_settings, "GEMINI_API_KEY", "").strip()
@@ -88,11 +89,25 @@ class GeminiAIService:
             print(f"Error calling Gemini API: {e}", file=sys.stderr)
             return "AI Service unavailable."
 
-    def summarize_screen_async(self, screen_text, callback):
+    def summarize_screen_async(self, screen_text, callback, error_callback=None):
         """Asynchronously summarizes screen text without blocking UI or Accessibility loops."""
+        with self._lock:
+            if self._is_summarizing:
+                if error_callback:
+                    error_callback("Already summarizing. Please wait.")
+                return
+            self._is_summarizing = True
+
         def run():
-            summary = self.summarize_screen(screen_text)
-            callback(summary)
+            try:
+                summary = self.summarize_screen(screen_text)
+                callback(summary)
+            except Exception as e:
+                if error_callback:
+                    error_callback(f"Error: {str(e)}")
+            finally:
+                with self._lock:
+                    self._is_summarizing = False
 
         threading.Thread(target=run, daemon=True).start()
 
