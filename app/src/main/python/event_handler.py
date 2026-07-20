@@ -45,10 +45,22 @@ class EventHandler:
 
             elif event_type == 32:  # TYPE_WINDOW_STATE_CHANGED
                 if active_settings.ANNOUNCE_WINDOW_CHANGES:
-                    # Update active app profile
                     pkg = str(event.getPackageName()) if event.getPackageName() else ""
-                    active_settings.CURRENT_APP_PACKAGE = pkg
-                    # We could load profile overrides here
+                    
+                    if pkg and pkg != active_settings.CURRENT_APP_PACKAGE:
+                        active_settings.CURRENT_APP_PACKAGE = pkg
+                        
+                        # Apply App Profiles dynamically
+                        profile = active_settings.APP_PROFILES.get(pkg, None)
+                        if profile:
+                            if "speech_rate" in profile:
+                                service.setSpeechRate(float(profile["speech_rate"]))
+                            if "auto_translate" in profile:
+                                active_settings.AUTO_TRANSLATE_ENABLED = bool(profile["auto_translate"])
+                        else:
+                            # Reset to defaults if no profile
+                            service.setSpeechRate(float(active_settings.SPEECH_RATE))
+                            active_settings.AUTO_TRANSLATE_ENABLED = False
 
                     window_text = node_parser.get_node_raw_text(source)
                     if window_text and window_text != self.last_spoken_text:

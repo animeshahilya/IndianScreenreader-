@@ -99,20 +99,20 @@ def ai_summarize_screen(service):
 
 def read_from_top(service):
     """Feature: Continuous Reading Mode - Read from top of screen."""
+    if getattr(settings.active_settings, "CONTINUOUS_READING_ACTIVE", False):
+        return  # Already reading
+        
     service.speak("Reading from top")
     settings.active_settings.CONTINUOUS_READING_ACTIVE = True
     
     # Simple background loop for continuous reading
-    # A real implementation would hook into TTS completion events,
-    # but polling is a safe fallback for the Python bridge.
     def read_loop():
         # Reset focus to top
         service.performFocusPrevious() # Just trigger a previous
-        # We really want to find the first node, but repeatedly doing prev is an approximation
-        for _ in range(20):
+        for _ in range(30):
             if not service.performFocusPrevious():
                 break
-            time.sleep(0.05)
+            time.sleep(0.04)
             
         time.sleep(1) # Wait for speech to start
         
@@ -129,6 +129,9 @@ def read_from_top(service):
 
 def read_from_here(service):
     """Feature: Continuous Reading Mode - Read from current focus."""
+    if getattr(settings.active_settings, "CONTINUOUS_READING_ACTIVE", False):
+        return  # Already reading
+        
     service.speak("Reading from here")
     settings.active_settings.CONTINUOUS_READING_ACTIVE = True
     
