@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.IndianScreenreader" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/navy_primary</item>
+        <item name="colorPrimaryVariant">@color/navy_primary_dark</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/navy_accent</item>
+        <item name="colorSecondaryVariant">@color/navy_accent</item>
+        <item name="colorOnSecondary">@color/navy_background</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@color/navy_background</item>
+        <!-- Background and surface colors -->
+        <item name="android:windowBackground">@color/navy_background</item>
+        <item name="colorSurface">@color/navy_surface</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        
+        <!-- UI Accessibility Overrides -->
+        <item name="android:minHeight">64dp</item>
+        
+        <item name="switchStyle">@style/Widget.App.Switch</item>
+    </style>
+    
+    <style name="Widget.App.Switch" parent="Widget.MaterialComponents.CompoundButton.Switch">
+        <item name="android:minHeight">64dp</item>
+        <item name="android:minWidth">64dp</item>
+    </style>
+
+</resources>

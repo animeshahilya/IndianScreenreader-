@@ -28,6 +28,17 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="Indian Screenreader"
+            android:theme="@style/Theme.IndianScreenreader">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Deep Navy Blue Theme Colors for High Accessibility -->
+    <color name="navy_primary">#1E88E5</color>
+    <color name="navy_primary_dark">#0D47A1</color>
+    <color name="navy_accent">#64B5F6</color>
+    
+    <color name="navy_background">#0a192f</color>
+    <color name="navy_surface">#112240</color>
+    <color name="navy_surface_elevated">#233554</color>
+    
+    <color name="text_primary">#E6F1FF</color>
+    <color name="text_secondary">#8892B0</color>
+    
+    <color name="error_red">#FF5252</color>
+    
+    <!-- Transparent overlay -->
+    <color name="transparent_overlay">#80000000</color>
+</resources>

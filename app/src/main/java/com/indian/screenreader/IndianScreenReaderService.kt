@@ -101,6 +101,11 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
             val py = Python.getInstance()
             try {
+                // Initialize settings with SharedPreferences
+                val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+                val settingsModule = py.getModule("settings")
+                settingsModule.callAttr("init_from_android", prefs)
+
                 pythonModule = py.getModule("screen_reader")
                 Log.i(TAG, "Loaded Python screen_reader module successfully")
             } catch (e: Exception) {
