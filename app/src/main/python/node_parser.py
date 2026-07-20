@@ -308,12 +308,16 @@ def get_node_raw_text(node):
                 if desc_str and desc_str not in text_parts:
                     text_parts.append(desc_str)
 
-        if hasattr(node, "getHintText") and not text_parts:
-            hint = node.getHintText()
-            if hint:
-                hint_str = _safe_str(hint)
-                if hint_str:
-                    text_parts.append(hint_str)
+        # Include Hint Text if the primary text was empty (ignore if Error is the only thing in text_parts)
+        if hasattr(node, "getHintText"):
+            # Check if we appended actual text/desc (Error doesn't count as primary content)
+            has_primary_content = any(not p.startswith("Error: ") for p in text_parts)
+            if not has_primary_content:
+                hint = node.getHintText()
+                if hint:
+                    hint_str = _safe_str(hint)
+                    if hint_str:
+                        text_parts.append(hint_str)
 
         if text_parts:
             return ", ".join(text_parts)

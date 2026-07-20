@@ -220,3 +220,4 @@ def remap_gesture(gesture_id, action_name):
 def on_interrupt():
     """Service interruption handler."""
     settings.active_settings.CONTINUOUS_READING_ACTIVE = False
+    settings.active_settings.INDIAN_MENU_OPEN = False
