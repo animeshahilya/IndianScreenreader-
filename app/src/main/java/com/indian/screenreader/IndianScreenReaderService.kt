@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.AudioManager
@@ -245,6 +246,78 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    fun playAudioBeepForEvent(eventType: String) {
+        executorService.execute {
+            try {
+                if (Python.isStarted()) {
+                    val py = Python.getInstance()
+                    val settingsModule = py.getModule("settings")
+                    val activeSettings = settingsModule["active_settings"]
+                    val soundTheme = activeSettings?.get("SOUND_THEME")?.toString() ?: "classic"
+                    val themeMap = activeSettings?.get("SOUND_THEME_MAP")
+                    val toneType = themeMap?.get(soundTheme)?.get(eventType)?.toInt() ?: ToneGenerator.TONE_PROP_BEEP
+                    playAudioBeep(toneType)
+                } else {
+                    playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting tone for event $eventType", e)
+                playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+            }
+        }
+    }
+
+    fun playDynamicScrollBeep(percentage: Float) {
+        executorService.execute {
+            try {
+                // Map percentage (0.0 to 1.0) to a frequency.
+                // 0.0 (top) = 1500 Hz, 1.0 (bottom) = 500 Hz
+                // Higher pitch when scrolling up (closer to 0), lower when down.
+                val clampedPercent = Math.max(0.0f, Math.min(1.0f, percentage))
+                val hz = 1500.0 - (clampedPercent * 1000.0)
+                
+                val durationMs = 40
+                val sampleRate = 44100
+                val numSamples = (durationMs * sampleRate) / 1000
+                val sample = ShortArray(numSamples)
+                val twoPi = 2.0 * Math.PI
+                
+                // Apply a simple envelope to prevent clicking sounds at start/end
+                for (i in 0 until numSamples) {
+                    val floatVal = Math.sin(twoPi * i / (sampleRate / hz))
+                    var envelope = 1.0
+                    val fadeSamples = 200
+                    if (i < fadeSamples) envelope = i.toDouble() / fadeSamples
+                    else if (i > numSamples - fadeSamples) envelope = (numSamples - i).toDouble() / fadeSamples
+                    
+                    sample[i] = (floatVal * envelope * Short.MAX_VALUE * 0.5).toInt().toShort() // 50% volume
+                }
+
+                val audioTrack = android.media.AudioTrack.Builder()
+                    .setAudioAttributes(android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+                    .setAudioFormat(android.media.AudioFormat.Builder()
+                        .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                        .build())
+                    .setBufferSizeInBytes(sample.size * 2)
+                    .setTransferMode(android.media.AudioTrack.MODE_STATIC)
+                    .build()
+                
+                audioTrack.write(sample, 0, sample.size)
+                audioTrack.play()
+                
+                Thread.sleep(durationMs.toLong() + 50)
+                audioTrack.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error playing dynamic scroll beep", e)
+            }
+        }
+    }
+
     fun playHapticFeedback(durationMs: Long = 30L) {
         try {
             if (vibrator != null && vibrator!!.hasVibrator()) {
@@ -357,10 +430,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             val targetNode = nodes[targetIndex]
             success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
             if (success) {
-                playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+                playAudioBeepForEvent("focus")
             }
         } else {
-            playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
+            playAudioBeepForEvent("boundary")
             speak("End of screen")
         }
 
@@ -402,10 +475,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             val targetNode = nodes[targetIndex]
             success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
             if (success) {
-                playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
+                playAudioBeepForEvent("focus")
             }
         } else {
-            playAudioBeep(ToneGenerator.TONE_PROP_BEEP2)
+            playAudioBeepForEvent("boundary")
             speak("Start of screen")
         }
 
@@ -437,7 +510,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         if (focused == null) return false
         val clicked = focused.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         focused.recycle()
-        if (clicked) playAudioBeep(ToneGenerator.TONE_PROP_ACK)
+        if (clicked) playAudioBeepForEvent("click")
         return clicked
     }
 

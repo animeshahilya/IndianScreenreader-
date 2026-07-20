@@ -142,6 +142,13 @@ class ScreenReaderSettings:
                 "window":   27,
                 "menu_open": 88,
             },
+            "windows": {
+                "focus":    22,   
+                "click":    24,   
+                "boundary": 28,   
+                "window":   26,
+                "menu_open": 24,
+            },
         }
 
         # --- FEATURE 4: Per-App Accessibility Profiles ---

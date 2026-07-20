@@ -66,6 +66,23 @@ class EventHandler:
                     if window_text and window_text != self.last_spoken_text:
                         self.last_spoken_text = window_text
                         service.speak(f"Window: {window_text}")
+            
+            elif event_type == 4096:  # TYPE_VIEW_SCROLLED
+                try:
+                    scroll_y = event.getScrollY()
+                    max_scroll_y = event.getMaxScrollY()
+                    
+                    # Fallback to X axis if Y axis is not scrollable but X is (e.g. horizontal pagers)
+                    if max_scroll_y <= 0:
+                        scroll_y = event.getScrollX()
+                        max_scroll_y = event.getMaxScrollX()
+
+                    if max_scroll_y > 0:
+                        percentage = float(scroll_y) / float(max_scroll_y)
+                        if hasattr(service, "playDynamicScrollBeep"):
+                            service.playDynamicScrollBeep(percentage)
+                except Exception:
+                    pass
 
         finally:
             if hasattr(source, "recycle"):
