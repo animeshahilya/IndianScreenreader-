@@ -295,16 +295,18 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     fun performFocusNext(): Boolean {
         val root = rootInActiveWindow ?: return false
+        
+        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
-        root.recycle()
 
-        if (nodes.isEmpty()) return false
+        if (nodes.isEmpty()) {
+            root.recycle()
+            currentFocused?.recycle()
+            return false
+        }
 
-        val currentRoot = rootInActiveWindow
-        val currentFocused = currentRoot?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = 0
-
         if (currentFocused != null) {
             for (i in nodes.indices) {
                 if (nodes[i] == currentFocused) {
@@ -314,7 +316,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
             currentFocused.recycle()
         }
-        currentRoot?.recycle()
 
         var success = false
         if (targetIndex < nodes.size) {
@@ -332,22 +333,25 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         for (node in nodes) {
             node.recycle()
         }
+        root.recycle()
 
         return success
     }
 
     fun performFocusPrevious(): Boolean {
         val root = rootInActiveWindow ?: return false
+        
+        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
-        root.recycle()
 
-        if (nodes.isEmpty()) return false
+        if (nodes.isEmpty()) {
+            root.recycle()
+            currentFocused?.recycle()
+            return false
+        }
 
-        val currentRoot = rootInActiveWindow
-        val currentFocused = currentRoot?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = -1
-
         if (currentFocused != null) {
             for (i in nodes.indices) {
                 if (nodes[i] == currentFocused) {
@@ -357,7 +361,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
             currentFocused.recycle()
         }
-        currentRoot?.recycle()
 
         var success = false
         if (targetIndex >= 0 && targetIndex < nodes.size) {
@@ -375,7 +378,20 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         for (node in nodes) {
             node.recycle()
         }
+        root.recycle()
 
+        return success
+    }
+
+    fun clearFocus(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        var success = false
+        if (currentFocused != null) {
+            success = currentFocused.performAction(AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
+            currentFocused.recycle()
+        }
+        root.recycle()
         return success
     }
 

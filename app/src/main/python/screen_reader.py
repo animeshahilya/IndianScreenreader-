@@ -107,14 +107,10 @@ def read_from_top(service):
     
     # Simple background loop for continuous reading
     def read_loop():
-        # Reset focus to top
-        service.performFocusPrevious() # Just trigger a previous
-        for _ in range(30):
-            if not service.performFocusPrevious():
-                break
-            time.sleep(0.04)
-            
-        time.sleep(1) # Wait for speech to start
+        # Reset focus by clearing it, so the next FocusNext starts at the top
+        if hasattr(service, "clearFocus"):
+            service.clearFocus()
+            time.sleep(0.1) # Wait for focus to clear
         
         while settings.active_settings.CONTINUOUS_READING_ACTIVE:
             success = service.performFocusNext()
