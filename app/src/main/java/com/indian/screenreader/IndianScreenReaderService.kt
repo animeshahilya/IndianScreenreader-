@@ -301,7 +301,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
         if (nodes.isEmpty()) return false
 
-        val currentFocused = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val currentRoot = rootInActiveWindow
+        val currentFocused = currentRoot?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = 0
 
         if (currentFocused != null) {
@@ -313,6 +314,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
             currentFocused.recycle()
         }
+        currentRoot?.recycle()
 
         var success = false
         if (targetIndex < nodes.size) {
@@ -342,7 +344,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
         if (nodes.isEmpty()) return false
 
-        val currentFocused = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val currentRoot = rootInActiveWindow
+        val currentFocused = currentRoot?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         var targetIndex = -1
 
         if (currentFocused != null) {
@@ -354,6 +357,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             }
             currentFocused.recycle()
         }
+        currentRoot?.recycle()
 
         var success = false
         if (targetIndex >= 0 && targetIndex < nodes.size) {

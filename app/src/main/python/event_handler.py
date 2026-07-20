@@ -56,8 +56,11 @@ class EventHandler:
                         service.speak(f"Window: {window_text}")
 
         finally:
-            pass # Source recycling is handled by the caller or GC now, wait, no, caller gave us a copy!
-            # The Kotlin code currently passes a copy of the event, which we should not recycle here because Python doesn't own the underlying Java object's lifecycle in the same way, but actually, the Kotlin code explicitly recycles the event AFTER calling Python. So we just do nothing here.
+            if hasattr(source, "recycle"):
+                try:
+                    source.recycle()
+                except Exception:
+                    pass
 
     # --- INDIAN MENU HANDLER ---
     def open_indian_menu(self, service):
