@@ -23,6 +23,12 @@ class ScreenReaderSettings:
         # NVDA Features
         self.INPUT_HELP_MODE = False  # Practice mode: speaks gesture name instead of executing
         self.PUNCTUATION_VERBOSITY = "all"  # "all", "some", "none"
+        
+        # Node Parser Flags
+        self.IGNORE_DECORATIVE_IMAGES = True
+        self.ANNOUNCE_GRID_POSITION = True
+        self.ANNOUNCE_LIST_COUNT = True
+        self.ANNOUNCE_VIEW_IDS = False
 
     def init_from_android(self, prefs):
         """Loads persistent user settings from Android SharedPreferences."""
@@ -139,6 +145,7 @@ class ScreenReaderSettings:
         }
 
         # --- FEATURE 4: Per-App Accessibility Profiles ---
+        self.CURRENT_APP_PACKAGE = ""
         # Maps package-name prefix -> dict of overrides
         self.APP_PROFILES = {
             "com.whatsapp": {

@@ -142,6 +142,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    fun isSpeaking(): Boolean {
+        return tts?.isSpeaking == true
+    }
+
     fun setSpeechRate(rate: Float) {
         if (ttsInitialized) {
             tts?.setSpeechRate(rate)

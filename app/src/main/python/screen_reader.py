@@ -117,8 +117,14 @@ def read_from_top(service):
             if not success:
                 settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                 break
-            # Wait a fixed amount or ideally sync with TTS (stubbed here with fixed delay)
-            time.sleep(2.5) 
+            
+            # Wait briefly for TTS to register and start speaking
+            time.sleep(0.15)
+            # Dynamically wait for actual TTS speech to finish
+            while getattr(service, "isSpeaking", lambda: False)():
+                if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                    break
+                time.sleep(0.1)
             
     threading.Thread(target=read_loop, daemon=True).start()
 
@@ -138,7 +144,12 @@ def read_from_here(service):
             if not success:
                 settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                 break
-            time.sleep(2.5)
+                
+            time.sleep(0.15)
+            while getattr(service, "isSpeaking", lambda: False)():
+                if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                    break
+                time.sleep(0.1)
             
     threading.Thread(target=read_loop, daemon=True).start()
 
