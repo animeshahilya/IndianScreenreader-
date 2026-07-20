@@ -46,9 +46,10 @@ class EventHandler:
                     self.last_spoken_time_ms = int(time.time() * 1000)
                     if getattr(active_settings, "AUTO_TRANSLATE_ENABLED", False):
                         import threading
-                        def translate_and_speak():
+                        target_lang = getattr(active_settings, "TRANSLATION_TARGET_LANGUAGE", "Hindi")
+                        def translate_and_speak(lang=target_lang):
                             try:
-                                translated = ai_service_instance.translate_text(spoken_text)
+                                translated = ai_service_instance.translate_text(spoken_text, lang)
                                 service.speak(translated)
                             except Exception:
                                 service.speak(spoken_text)

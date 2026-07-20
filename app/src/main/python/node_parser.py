@@ -388,13 +388,25 @@ def format_node_speech(node, settings):
         # Apply punctuation verbosity
         raw_text = apply_punctuation_verbosity(raw_text, settings.PUNCTUATION_VERBOSITY)
 
+        # Apply capitalization announcement (NVDA "Cap A" style)
+        cap_mode = getattr(settings, "CAPITALIZATION_ANNOUNCEMENT", "none")
+        raw_text = format_capitalization(raw_text, cap_mode)
+
         role = get_role_description(node) if settings.ANNOUNCE_ELEMENT_TYPES else ""
         states = get_state_description(node) if settings.ANNOUNCE_ELEMENT_STATE else []
         positions = get_grid_or_list_position(node, settings)
         view_id = get_view_id_resource_name(node, settings)
 
+        is_unlabeled = False
         if not raw_text and (_safe_bool(node, "isFocusable") or _safe_bool(node, "isClickable")):
             raw_text = "Unlabeled"
+            is_unlabeled = True
+
+        # Low verbosity: return minimal speech but always include role for unlabeled nodes
+        if settings.VERBOSITY_LEVEL == "low":
+            if is_unlabeled and role:
+                return f"{raw_text}, {role}"
+            return raw_text if raw_text else role
 
         parts = []
 
@@ -412,9 +424,6 @@ def format_node_speech(node, settings):
 
         if view_id:
             parts.append(view_id)
-
-        if settings.VERBOSITY_LEVEL == "low":
-            return raw_text if raw_text else role
 
         return ", ".join(parts)
     except Exception:

@@ -380,8 +380,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     // --- TALKBACK LOW-LEVEL ACCESSIBILITY TREE NAVIGATION ENGINE ---
 
-    private fun collectFocusableNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
-        if (node == null || !node.isVisibleToUser) return
+    private fun collectFocusableNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>, depth: Int = 0) {
+        if (node == null || !node.isVisibleToUser || depth > 30) return
 
         val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank() || !node.hintText.isNullOrBlank() || !node.stateDescription.isNullOrBlank() || !node.error.isNullOrBlank()
         val isInteractive = node.isClickable || node.isCheckable || node.isFocusable || node.isHeading
@@ -395,7 +395,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         for (i in 0 until node.childCount) {
             val child = node.getChild(i)
             if (child != null) {
-                collectFocusableNodes(child, list)
+                collectFocusableNodes(child, list, depth + 1)
                 child.recycle()
             }
         }
@@ -466,7 +466,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             return false
         }
 
-        var targetIndex = -1
+        var targetIndex = nodes.size - 1  // Default: focus last element if nothing focused
         if (currentFocused != null) {
             for (i in nodes.indices) {
                 if (nodes[i] == currentFocused) {

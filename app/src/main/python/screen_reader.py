@@ -6,6 +6,9 @@ import node_parser
 from event_handler import event_handler_instance
 from ai_service import ai_service_instance
 
+# Lock to prevent two continuous reading threads from running simultaneously
+_reading_lock = threading.Lock()
+
 
 def on_accessibility_event(service, event):
     """Main event dispatcher called directly from Kotlin AccessibilityService."""
@@ -160,42 +163,47 @@ def read_from_top(service):
     """Feature: Continuous Reading Mode - Read from top of screen."""
     if getattr(settings.active_settings, "CONTINUOUS_READING_ACTIVE", False):
         return  # Already reading
+    if not _reading_lock.acquire(blocking=False):
+        return  # Another reading thread is already running
         
     service.speak("Reading from top")
     settings.active_settings.CONTINUOUS_READING_ACTIVE = True
     
     # Simple background loop for continuous reading
     def read_loop():
-        # Reset focus by clearing it, so the next FocusNext starts at the top
-        if hasattr(service, "clearFocus"):
-            service.clearFocus()
-            time.sleep(0.1) # Wait for focus to clear
-        
-        while settings.active_settings.CONTINUOUS_READING_ACTIVE:
-            success = service.performFocusNext()
-            if not success:
-                settings.active_settings.CONTINUOUS_READING_ACTIVE = False
-                break
+        try:
+            # Reset focus by clearing it, so the next FocusNext starts at the top
+            if hasattr(service, "clearFocus"):
+                service.clearFocus()
+                time.sleep(0.1) # Wait for focus to clear
             
-            # Wait up to 1.5 seconds for TTS to START speaking
-            started_speaking = False
-            for _ in range(15):
-                if getattr(service, "isSpeaking", lambda: False)():
-                    started_speaking = True
+            while settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                success = service.performFocusNext()
+                if not success:
+                    settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                     break
-                if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
-                    break
-                time.sleep(0.1)
                 
-            # Wait dynamically for TTS to FINISH speaking
-            if started_speaking:
-                while getattr(service, "isSpeaking", lambda: False)():
+                # Wait up to 1.5 seconds for TTS to START speaking
+                started_speaking = False
+                for _ in range(15):
+                    if getattr(service, "isSpeaking", lambda: False)():
+                        started_speaking = True
+                        break
                     if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
                         break
                     time.sleep(0.1)
-            else:
-                # Fallback if TTS engine failed or was instantaneous
-                time.sleep(0.5)
+                    
+                # Wait dynamically for TTS to FINISH speaking
+                if started_speaking:
+                    while getattr(service, "isSpeaking", lambda: False)():
+                        if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                            break
+                        time.sleep(0.1)
+                else:
+                    # Fallback if TTS engine failed or was instantaneous
+                    time.sleep(0.5)
+        finally:
+            _reading_lock.release()
             
     threading.Thread(target=read_loop, daemon=True).start()
 
@@ -204,34 +212,39 @@ def read_from_here(service):
     """Feature: Continuous Reading Mode - Read from current focus."""
     if getattr(settings.active_settings, "CONTINUOUS_READING_ACTIVE", False):
         return  # Already reading
+    if not _reading_lock.acquire(blocking=False):
+        return  # Another reading thread is already running
         
     service.speak("Reading from here")
     settings.active_settings.CONTINUOUS_READING_ACTIVE = True
     
     def read_loop():
-        time.sleep(1) # wait for the initial speech
-        while settings.active_settings.CONTINUOUS_READING_ACTIVE:
-            success = service.performFocusNext()
-            if not success:
-                settings.active_settings.CONTINUOUS_READING_ACTIVE = False
-                break
-                
-            started_speaking = False
-            for _ in range(15):
-                if getattr(service, "isSpeaking", lambda: False)():
-                    started_speaking = True
+        try:
+            time.sleep(1) # wait for the initial speech
+            while settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                success = service.performFocusNext()
+                if not success:
+                    settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                     break
-                if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
-                    break
-                time.sleep(0.1)
-                
-            if started_speaking:
-                while getattr(service, "isSpeaking", lambda: False)():
+                    
+                started_speaking = False
+                for _ in range(15):
+                    if getattr(service, "isSpeaking", lambda: False)():
+                        started_speaking = True
+                        break
                     if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
                         break
                     time.sleep(0.1)
-            else:
-                time.sleep(0.5)
+                    
+                if started_speaking:
+                    while getattr(service, "isSpeaking", lambda: False)():
+                        if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                            break
+                        time.sleep(0.1)
+                else:
+                    time.sleep(0.5)
+        finally:
+            _reading_lock.release()
             
     threading.Thread(target=read_loop, daemon=True).start()
 
