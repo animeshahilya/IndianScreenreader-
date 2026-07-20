@@ -66,6 +66,24 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+        if (key == "SCREEN_CURTAIN_ENABLED") {
+            val enabled = sharedPreferences.getBoolean(key, false)
+            setScreenCurtainEnabled(enabled)
+        }
+        
+        executorService.execute {
+            try {
+                val py = Python.getInstance()
+                val settingsModule = py.getModule("settings")
+                settingsModule.callAttr("init_from_android", sharedPreferences)
+                Log.i(TAG, "Python settings dynamically reloaded from SharedPreferences")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reloading settings in python", e)
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Service Connected with TalkBack Low-Level Navigation Engine")
@@ -111,6 +129,14 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load Python module", e)
             }
+        }
+        
+        // Register SharedPreferences listener
+        try {
+            val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+            prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering SharedPreferences listener", e)
         }
     }
 
@@ -472,8 +498,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         try {
             unregisterReceiver(screenStateReceiver)
             setScreenCurtainEnabled(false)
+            val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+            prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering receiver or removing curtain", e)
+            Log.e(TAG, "Error during cleanup", e)
         }
         stopSpeech()
         tts?.shutdown()
@@ -483,7 +511,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     fun captureScreenForAI() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, mainHandler.asExecutor(), object : TakeScreenshotCallback {
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     try {
                         val hwBuffer = screenshot.hardwareBuffer
