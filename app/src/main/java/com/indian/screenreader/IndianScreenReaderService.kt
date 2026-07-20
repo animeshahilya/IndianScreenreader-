@@ -427,10 +427,17 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
         var success = false
         if (targetIndex < nodes.size) {
-            val targetNode = nodes[targetIndex]
-            success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-            if (success) {
-                playAudioBeepForEvent("focus")
+            for (i in targetIndex until nodes.size) {
+                val targetNode = nodes[i]
+                success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                if (success) {
+                    playAudioBeepForEvent("focus")
+                    break
+                }
+            }
+            if (!success) {
+                playAudioBeepForEvent("boundary")
+                speak("End of screen")
             }
         } else {
             playAudioBeepForEvent("boundary")
@@ -472,14 +479,21 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
         var success = false
         if (targetIndex >= 0 && targetIndex < nodes.size) {
-            val targetNode = nodes[targetIndex]
-            success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-            if (success) {
-                playAudioBeepForEvent("focus")
+            for (i in targetIndex downTo 0) {
+                val targetNode = nodes[i]
+                success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                if (success) {
+                    playAudioBeepForEvent("focus")
+                    break
+                }
+            }
+            if (!success) {
+                playAudioBeepForEvent("boundary")
+                speak("Top of screen")
             }
         } else {
             playAudioBeepForEvent("boundary")
-            speak("Start of screen")
+            speak("Top of screen")
         }
 
         // Recycle all collected nodes

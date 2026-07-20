@@ -276,12 +276,12 @@ def get_view_id_resource_name(node, settings):
     return ""
 
 
-def get_node_raw_text(node):
+def get_node_raw_text(node, _depth=0):
     """Combines text, content description, hint, or error message cleanly.
     
     IMPORTANT: Does NOT recycle the node — caller is responsible for recycling.
     """
-    if node is None:
+    if node is None or _depth > 10:
         return ""
 
     try:
@@ -332,7 +332,7 @@ def get_node_raw_text(node):
                         child = node.getChild(i)
                         if child is not None:
                             try:
-                                child_text = get_node_raw_text(child)
+                                child_text = get_node_raw_text(child, _depth + 1)
                                 if child_text:
                                     child_texts.append(child_text)
                             finally:
