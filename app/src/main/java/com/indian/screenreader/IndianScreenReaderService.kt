@@ -480,4 +480,39 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         toneGenerator?.release()
         executorService.shutdown()
     }
+
+    fun captureScreenForAI() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, mainHandler.asExecutor(), object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    try {
+                        val hwBuffer = screenshot.hardwareBuffer
+                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                        if (bitmap != null) {
+                            val outputStream = java.io.ByteArrayOutputStream()
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                            val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
+                            
+                            executorService.execute {
+                                try {
+                                    pythonModule?.callAttr("on_screenshot_captured", this@IndianScreenReaderService, base64)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error passing screenshot to python", e)
+                                }
+                            }
+                        } else {
+                            speak("Failed to process screenshot")
+                        }
+                    } catch (e: Exception) {
+                        speak("Error capturing screenshot")
+                    }
+                }
+                override fun onFailure(errorCode: Int) {
+                    speak("Failed to capture screenshot. Error code $errorCode")
+                }
+            })
+        } else {
+            speak("Screen capture requires Android 11 or higher")
+        }
+    }
 }

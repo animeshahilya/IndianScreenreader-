@@ -109,6 +109,10 @@ class EventHandler:
             service.speak(f"AI Translation {state}")
         elif idx == 2:  # AI Image Description
             service.speak("Capturing screen for AI Vision description...")
+            if hasattr(service, "captureScreenForAI"):
+                service.captureScreenForAI()
+            else:
+                service.speak("Screen capture not supported on this device.")
         elif idx == 3:  # Device Status
             screen_reader.read_device_status(service)
         elif idx == 4:  # Toggle Input Help

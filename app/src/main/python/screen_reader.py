@@ -17,6 +17,29 @@ def on_gesture(service, gesture_id):
     return event_handler_instance.handle_gesture(service, gesture_id)
 
 
+def on_screenshot_captured(service, base64_str):
+    """Called from Kotlin when a screenshot is successfully captured for AI Vision."""
+    if not base64_str:
+        service.speak("Failed to process screenshot data.")
+        return
+        
+    def on_vision_ready(description):
+        service.speak(f"AI Vision: {description}")
+        
+    def on_vision_error(err):
+        service.speak(f"AI Vision failed: {err}")
+        
+    def run_vision():
+        try:
+            desc = ai_service_instance.describe_image_b64(base64_str)
+            on_vision_ready(desc)
+        except Exception as e:
+            on_vision_error(str(e))
+            
+    threading.Thread(target=run_vision, daemon=True).start()
+
+
+
 def open_indian_menu(service):
     """Opens TalkBack-style Indian Context Menu."""
     event_handler_instance.open_indian_menu(service)
@@ -118,13 +141,25 @@ def read_from_top(service):
                 settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                 break
             
-            # Wait briefly for TTS to register and start speaking
-            time.sleep(0.15)
-            # Dynamically wait for actual TTS speech to finish
-            while getattr(service, "isSpeaking", lambda: False)():
+            # Wait up to 1.5 seconds for TTS to START speaking
+            started_speaking = False
+            for _ in range(15):
+                if getattr(service, "isSpeaking", lambda: False)():
+                    started_speaking = True
+                    break
                 if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
                     break
                 time.sleep(0.1)
+                
+            # Wait dynamically for TTS to FINISH speaking
+            if started_speaking:
+                while getattr(service, "isSpeaking", lambda: False)():
+                    if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                        break
+                    time.sleep(0.1)
+            else:
+                # Fallback if TTS engine failed or was instantaneous
+                time.sleep(0.5)
             
     threading.Thread(target=read_loop, daemon=True).start()
 
@@ -145,11 +180,22 @@ def read_from_here(service):
                 settings.active_settings.CONTINUOUS_READING_ACTIVE = False
                 break
                 
-            time.sleep(0.15)
-            while getattr(service, "isSpeaking", lambda: False)():
+            started_speaking = False
+            for _ in range(15):
+                if getattr(service, "isSpeaking", lambda: False)():
+                    started_speaking = True
+                    break
                 if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
                     break
                 time.sleep(0.1)
+                
+            if started_speaking:
+                while getattr(service, "isSpeaking", lambda: False)():
+                    if not settings.active_settings.CONTINUOUS_READING_ACTIVE:
+                        break
+                    time.sleep(0.1)
+            else:
+                time.sleep(0.5)
             
     threading.Thread(target=read_loop, daemon=True).start()
 
