@@ -73,7 +73,7 @@ class GeminiAIService:
                 method="POST"
             )
 
-            with urllib.request.urlopen(req, timeout=5) as response:
+            with urllib.request.urlopen(req, timeout=20) as response:
                 res_body = response.read().decode("utf-8")
                 res_json = json.loads(res_body)
 

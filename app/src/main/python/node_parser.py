@@ -285,14 +285,14 @@ def get_node_raw_text(node):
         return ""
 
     try:
+        text_parts = []
+
         if hasattr(node, "getError"):
             err = node.getError()
             if err:
                 err_str = _safe_str(err)
                 if err_str:
-                    return f"Error: {err_str}"
-
-        text_parts = []
+                    text_parts.append(f"Error: {err_str}")
 
         if hasattr(node, "getText"):
             text = node.getText()
