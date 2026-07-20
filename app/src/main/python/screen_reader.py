@@ -120,6 +120,42 @@ def ai_summarize_screen(service):
     ai_service_instance.summarize_screen_async(screen_text, on_summary_ready, on_summary_error)
 
 
+def ai_simplify_screen(service):
+    """Google AI Studio Gemini Feature: Simplifies current active screen content for cognitive accessibility."""
+    root = service.rootInActiveWindow
+    if root is None:
+        service.speak("Cannot capture screen content.")
+        return
+
+    screen_text = node_parser.get_node_raw_text(root)
+    if hasattr(root, "recycle"):
+        try:
+            root.recycle()
+        except Exception:
+            pass
+
+    if not screen_text:
+        service.speak("No text found on screen to simplify.")
+        return
+
+    service.speak("Simplifying screen content using Gemini AI...")
+
+    def on_simplify_ready(summary):
+        service.speak(f"Simplified Text: {summary}")
+        
+    def on_simplify_error(err):
+        service.speak(f"Simplification failed: {err}")
+
+    def run_simplify():
+        try:
+            simplified = ai_service_instance.rewrite_simplified(screen_text)
+            on_simplify_ready(simplified)
+        except Exception as e:
+            on_simplify_error(str(e))
+
+    threading.Thread(target=run_simplify, daemon=True).start()
+
+
 def read_from_top(service):
     """Feature: Continuous Reading Mode - Read from top of screen."""
     if getattr(settings.active_settings, "CONTINUOUS_READING_ACTIVE", False):

@@ -60,7 +60,8 @@ class ScreenReaderSettings:
             "9. Read From Here (Continuous Reading)",
             "10. Read From Top",
             "11. Voice Command Mode",
-            "12. Close Indian Menu"
+            "12. AI Simplify Screen",
+            "13. Close Indian Menu"
         ]
 
         # Google AI Studio Gemini Integration

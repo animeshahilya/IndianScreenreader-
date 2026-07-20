@@ -19,6 +19,7 @@ class GeminiAIService:
     def __init__(self):
         self._lock = threading.Lock()
         self._is_summarizing = False
+        self._is_describing_image = False
 
     def get_api_key(self):
         return getattr(active_settings, "GEMINI_API_KEY", "").strip()
@@ -153,10 +154,18 @@ class GeminiAIService:
         return self.make_gemini_request(prompt)
 
     def describe_image_b64(self, base64_jpeg):
-        prompt = (
-            "Describe what is in this image concisely in 1 or 2 sentences for a blind user."
-        )
-        return self.make_gemini_request(prompt, base64_image=base64_jpeg)
+        with self._lock:
+            if self._is_describing_image:
+                raise RuntimeError("Already describing an image. Please wait.")
+            self._is_describing_image = True
+        try:
+            prompt = (
+                "Describe what is in this image concisely in 1 or 2 sentences for a blind user."
+            )
+            return self.make_gemini_request(prompt, base64_image=base64_jpeg)
+        finally:
+            with self._lock:
+                self._is_describing_image = False
 
 
 # Global AI Service instance

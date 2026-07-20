@@ -41,7 +41,17 @@ class EventHandler:
 
                 if spoken_text:
                     self.last_spoken_text = spoken_text
-                    service.speak(spoken_text)
+                    if getattr(active_settings, "AUTO_TRANSLATE_ENABLED", False):
+                        import threading
+                        def translate_and_speak():
+                            try:
+                                translated = ai_service_instance.translate_text(spoken_text)
+                                service.speak(translated)
+                            except Exception:
+                                service.speak(spoken_text)
+                        threading.Thread(target=translate_and_speak, daemon=True).start()
+                    else:
+                        service.speak(spoken_text)
 
             elif event_type == 32:  # TYPE_WINDOW_STATE_CHANGED
                 if active_settings.ANNOUNCE_WINDOW_CHANGES:
@@ -146,7 +156,9 @@ class EventHandler:
             screen_reader.read_from_top(service)
         elif idx == 10: # Voice Command Mode
             screen_reader.start_voice_command(service)
-        elif idx == 11: # Close Menu
+        elif idx == 11: # Simplify Current Screen
+            screen_reader.ai_simplify_screen(service)
+        elif idx == 12: # Close Menu
             service.speak("Indian Menu closed.")
 
     def handle_gesture(self, service, gesture_id):
