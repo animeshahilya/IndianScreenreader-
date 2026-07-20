@@ -10,6 +10,7 @@ class EventHandler:
 
     def __init__(self):
         self.last_focus_event_time_ms = 0
+        self.last_spoken_time_ms = 0
         self.last_spoken_text = ""
         self.current_granularity_index = 0
 
@@ -37,10 +38,12 @@ class EventHandler:
                 spoken_text = node_parser.format_node_speech(source, active_settings)
 
                 if active_settings.DEDUPLICATE_SPEECH and spoken_text == self.last_spoken_text:
-                    return
+                    if int(time.time() * 1000) - self.last_spoken_time_ms < 500:
+                        return
 
                 if spoken_text:
                     self.last_spoken_text = spoken_text
+                    self.last_spoken_time_ms = int(time.time() * 1000)
                     if getattr(active_settings, "AUTO_TRANSLATE_ENABLED", False):
                         import threading
                         def translate_and_speak():

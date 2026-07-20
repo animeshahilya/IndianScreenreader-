@@ -32,17 +32,6 @@ class ScreenReaderSettings:
 
     def init_from_android(self, prefs):
         """Loads persistent user settings from Android SharedPreferences."""
-        try:
-            api_key = prefs.getString("GEMINI_API_KEY", "")
-            if api_key:
-                self.GEMINI_API_KEY = str(api_key)
-            
-            self.AUTO_TRANSLATE_ENABLED = bool(prefs.getBoolean("AUTO_TRANSLATE_ENABLED", False))
-            self.SCREEN_CURTAIN_ENABLED = bool(prefs.getBoolean("SCREEN_CURTAIN_ENABLED", False))
-            self.INPUT_HELP_MODE = bool(prefs.getBoolean("INPUT_HELP_MODE", False))
-            self.DEDUPLICATE_SPEECH = bool(prefs.getBoolean("DEDUPLICATE_SPEECH", True))
-        except Exception as e:
-            print(f"Error loading SharedPreferences in Python: {e}")
         self.CAPITALIZATION_ANNOUNCEMENT = "prefix"  # "prefix" ("Cap A"), "pitch", "none"
 
         # Indian Menu State
@@ -64,11 +53,24 @@ class ScreenReaderSettings:
             "13. Close Indian Menu"
         ]
 
-        # Google AI Studio Gemini Integration
+        # Google AI Studio Gemini Integration (defaults)
         self.GEMINI_API_KEY = ""
         self.AUTO_TRANSLATE_ENABLED = False
         self.TRANSLATION_TARGET_LANGUAGE = "Hindi"
         self.SIMPLIFY_TEXT_ENABLED = False
+
+        # Now load from SharedPreferences — these OVERRIDE the defaults above
+        try:
+            api_key = prefs.getString("GEMINI_API_KEY", "")
+            if api_key:
+                self.GEMINI_API_KEY = str(api_key)
+
+            self.AUTO_TRANSLATE_ENABLED = bool(prefs.getBoolean("AUTO_TRANSLATE_ENABLED", False))
+            self.SCREEN_CURTAIN_ENABLED = bool(prefs.getBoolean("SCREEN_CURTAIN_ENABLED", False))
+            self.INPUT_HELP_MODE = bool(prefs.getBoolean("INPUT_HELP_MODE", False))
+            self.DEDUPLICATE_SPEECH = bool(prefs.getBoolean("DEDUPLICATE_SPEECH", True))
+        except Exception as e:
+            print(f"Error loading SharedPreferences in Python: {e}")
 
         # Granularities
         self.GRANULARITIES = ["default", "control", "heading", "word", "character"]

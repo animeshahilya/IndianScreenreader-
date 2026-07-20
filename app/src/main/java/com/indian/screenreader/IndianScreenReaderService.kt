@@ -602,21 +602,26 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     try {
                         val hwBuffer = screenshot.hardwareBuffer
-                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                        if (bitmap != null) {
-                            val outputStream = java.io.ByteArrayOutputStream()
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
-                            val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
-                            
-                            executorService.execute {
-                                try {
-                                    pythonModule?.callAttr("on_screenshot_captured", this@IndianScreenReaderService, base64)
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error passing screenshot to python", e)
+                        try {
+                            val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                            if (bitmap != null) {
+                                val outputStream = java.io.ByteArrayOutputStream()
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                                val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
+                                
+                                executorService.execute {
+                                    try {
+                                        pythonModule?.callAttr("on_screenshot_captured", this@IndianScreenReaderService, base64)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error passing screenshot to python", e)
+                                    }
                                 }
+                                bitmap.recycle()
+                            } else {
+                                speak("Failed to process screenshot")
                             }
-                        } else {
-                            speak("Failed to process screenshot")
+                        } finally {
+                            hwBuffer.close()
                         }
                     } catch (e: Exception) {
                         speak("Error capturing screenshot")

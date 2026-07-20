@@ -207,9 +207,14 @@ def get_state_description(node):
     states = []
     try:
         if _safe_bool(node, "isPassword"):
-            text_val = get_node_raw_text(node)
-            if text_val:
-                states.append(f"Password field, {len(text_val)} characters")
+            # Count only getText() chars — NOT hint/error/state which get_node_raw_text includes
+            pw_text = ""
+            if hasattr(node, "getText"):
+                t = node.getText()
+                if t:
+                    pw_text = _safe_str(t)
+            if pw_text:
+                states.append(f"Password field, {len(pw_text)} characters")
             else:
                 states.append("Password field")
 
@@ -388,6 +393,9 @@ def format_node_speech(node, settings):
         positions = get_grid_or_list_position(node, settings)
         view_id = get_view_id_resource_name(node, settings)
 
+        if not raw_text and (_safe_bool(node, "isFocusable") or _safe_bool(node, "isClickable")):
+            raw_text = "Unlabeled"
+
         parts = []
 
         if raw_text:
@@ -407,11 +415,6 @@ def format_node_speech(node, settings):
 
         if settings.VERBOSITY_LEVEL == "low":
             return raw_text if raw_text else role
-
-        if not parts:
-            if _safe_bool(node, "isFocusable") or _safe_bool(node, "isClickable"):
-                return "Unlabeled"
-            return ""
 
         return ", ".join(parts)
     except Exception:
