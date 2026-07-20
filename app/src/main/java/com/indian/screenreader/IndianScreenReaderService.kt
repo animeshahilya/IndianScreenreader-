@@ -383,7 +383,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     private fun collectFocusableNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
         if (node == null || !node.isVisibleToUser) return
 
-        val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
+        val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank() || !node.hintText.isNullOrBlank() || !node.stateDescription.isNullOrBlank() || !node.error.isNullOrBlank()
         val isInteractive = node.isClickable || node.isCheckable || node.isFocusable || node.isHeading
 
         if (hasText || isInteractive) {

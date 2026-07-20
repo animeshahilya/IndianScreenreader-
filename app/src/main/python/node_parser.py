@@ -308,16 +308,19 @@ def get_node_raw_text(node, _depth=0):
                 if desc_str and desc_str not in text_parts:
                     text_parts.append(desc_str)
 
-        # Include Hint Text if the primary text was empty (ignore if Error is the only thing in text_parts)
+        if hasattr(node, "getStateDescription"):
+            state_desc = node.getStateDescription()
+            if state_desc:
+                state_str = _safe_str(state_desc)
+                if state_str and state_str not in text_parts:
+                    text_parts.append(state_str)
+
         if hasattr(node, "getHintText"):
-            # Check if we appended actual text/desc (Error doesn't count as primary content)
-            has_primary_content = any(not p.startswith("Error: ") for p in text_parts)
-            if not has_primary_content:
-                hint = node.getHintText()
-                if hint:
-                    hint_str = _safe_str(hint)
-                    if hint_str:
-                        text_parts.append(hint_str)
+            hint = node.getHintText()
+            if hint:
+                hint_str = _safe_str(hint)
+                if hint_str and hint_str not in text_parts:
+                    text_parts.append(hint_str)
 
         if text_parts:
             return ", ".join(text_parts)
@@ -404,6 +407,11 @@ def format_node_speech(node, settings):
 
         if settings.VERBOSITY_LEVEL == "low":
             return raw_text if raw_text else role
+
+        if not parts:
+            if _safe_bool(node, "isFocusable") or _safe_bool(node, "isClickable"):
+                return "Unlabeled"
+            return ""
 
         return ", ".join(parts)
     except Exception:
