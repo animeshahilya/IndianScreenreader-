@@ -8,7 +8,6 @@
     android:canRequestTouchExplorationMode="true"
     android:canPerformGestures="true"
     android:canTakeScreenshot="true"
-    android:canRequestGestureDetection="true"
     android:description="@string/accessibility_service_description"
     android:settingsActivity="com.indian.screenreader.SettingsActivity"
     android:notificationTimeout="20" />
