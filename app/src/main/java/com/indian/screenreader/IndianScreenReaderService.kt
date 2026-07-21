@@ -22,25 +22,21 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
-import com.chaquo.python.PyObject
-import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
+import com.indian.screenreader.core.AiService
+import com.indian.screenreader.core.EventHandler
+import com.indian.screenreader.core.NodeParser
+import com.indian.screenreader.core.Settings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
-/**
- * Low-Level TalkBack Adapted Accessibility Engine for Indian Screenreader.
- * Direct Android 16 (minSdk = 36) Framework Integration with Depth-First Search
- * Node Traversal for 100% reliable swipe navigation across all Android applications.
- */
 class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     private val TAG = "IndianScreenReader"
     private var tts: TextToSpeech? = null
-    private var pythonModule: PyObject? = null
     private var ttsInitialized = false
     private var toneGenerator: ToneGenerator? = null
     private var vibrator: Vibrator? = null
@@ -50,6 +46,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val executorService = Executors.newFixedThreadPool(2)
+    private lateinit var eventHandler: EventHandler
+
+    private val readingNodes = mutableListOf<AccessibilityNodeInfo>()
+    private var readingIndex = 0
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -72,27 +72,20 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             val enabled = sharedPreferences.getBoolean(key, false)
             setScreenCurtainEnabled(enabled)
         }
-        
-        executorService.execute {
-            try {
-                val py = Python.getInstance()
-                val settingsModule = py.getModule("settings")
-                settingsModule.callAttr("init_from_android", sharedPreferences)
-                Log.i(TAG, "Python settings dynamically reloaded from SharedPreferences")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reloading settings in python", e)
-            }
-        }
+        Settings.initFromAndroid(sharedPreferences)
+        Log.i(TAG, "Native settings dynamically reloaded from SharedPreferences")
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Service Connected with TalkBack Low-Level Navigation Engine")
 
+        eventHandler = EventHandler(this)
+
         // Initialize TTS
         tts = TextToSpeech(this, this)
 
-        // Initialize ToneGenerator, Vibrator & WindowManager
+        // Initialize Audio/Haptics/Window
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 60)
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
@@ -101,7 +94,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             Log.e(TAG, "Error initializing audio/vibration/window manager", e)
         }
 
-        // Register Screen ON/OFF Receiver safely for Android 13+
+        // Register Receivers safely
         try {
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
@@ -111,30 +104,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         } catch (e: Exception) {
             Log.e(TAG, "Error registering screen state receiver", e)
         }
-
-        // Initialize Chaquopy Python Engine on background thread
-        executorService.execute {
-            if (!Python.isStarted()) {
-                Python.start(AndroidPlatform(this))
-            }
-
-            val py = Python.getInstance()
-            try {
-                // Initialize settings with SharedPreferences
-                val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
-                val settingsModule = py.getModule("settings")
-                settingsModule.callAttr("init_from_android", prefs)
-
-                pythonModule = py.getModule("screen_reader")
-                Log.i(TAG, "Loaded Python screen_reader module successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load Python module", e)
-            }
-        }
         
-        // Register SharedPreferences listener
         try {
             val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+            Settings.initFromAndroid(prefs)
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         } catch (e: Exception) {
             Log.e(TAG, "Error registering SharedPreferences listener", e)
@@ -145,6 +118,25 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         if (status == TextToSpeech.SUCCESS) {
             ttsInitialized = true
             tts?.language = Locale.getDefault()
+            
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                
+                override fun onDone(utteranceId: String?) {
+                    if (utteranceId?.startsWith("Continuous_") == true && Settings.CONTINUOUS_READING_ACTIVE) {
+                        mainHandler.post {
+                            readNextNode()
+                        }
+                    }
+                }
+                
+                override fun onError(utteranceId: String?) {
+                    if (utteranceId?.startsWith("Continuous_") == true && Settings.CONTINUOUS_READING_ACTIVE) {
+                        Settings.CONTINUOUS_READING_ACTIVE = false
+                    }
+                }
+            })
+            
             Log.i(TAG, "TTS Initialized successfully")
             speak("Indian Screen reader ready")
             playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
@@ -154,12 +146,12 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    fun speak(text: String, flush: Boolean = true) {
+    fun speak(text: String, flush: Boolean = true, isContinuous: Boolean = false) {
         if (!isScreenOn) return
-
         if (ttsInitialized && text.isNotBlank()) {
             val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            tts?.speak(text, queueMode, null, "Utterance_${System.currentTimeMillis()}")
+            val utteranceId = if (isContinuous) "Continuous_${System.currentTimeMillis()}" else "Utterance_${System.currentTimeMillis()}"
+            tts?.speak(text, queueMode, null, utteranceId)
         }
     }
 
@@ -167,46 +159,15 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         if (ttsInitialized) {
             tts?.stop()
         }
+        Settings.CONTINUOUS_READING_ACTIVE = false
     }
 
-    fun isSpeaking(): Boolean {
-        return tts?.isSpeaking == true
-    }
+    fun isSpeaking(): Boolean = tts?.isSpeaking == true
 
     fun setSpeechRate(rate: Float) {
-        if (ttsInitialized) {
-            tts?.setSpeechRate(rate)
-        }
+        if (ttsInitialized) tts?.setSpeechRate(rate)
     }
 
-    fun setPitch(pitch: Float) {
-        if (ttsInitialized) {
-            tts?.setPitch(pitch)
-        }
-    }
-
-    fun setLanguage(languageCode: String) {
-        if (!ttsInitialized) return
-        try {
-            val locale = when (languageCode.lowercase()) {
-                "hi" -> Locale("hi", "IN")
-                "ta" -> Locale("ta", "IN")
-                "te" -> Locale("te", "IN")
-                "bn" -> Locale("bn", "IN")
-                "mr" -> Locale("mr", "IN")
-                "gu" -> Locale("gu", "IN")
-                else -> Locale.ENGLISH
-            }
-            tts?.language = locale
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting TTS locale for $languageCode", e)
-        }
-    }
-
-    /**
-     * Screen Curtain Privacy Feature: Blacks out the screen display
-     * while touch exploration, TTS, and haptics remain fully active.
-     */
     fun setScreenCurtainEnabled(enabled: Boolean) {
         mainHandler.post {
             try {
@@ -223,19 +184,26 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                             PixelFormat.TRANSLUCENT
                         )
                         windowManager?.addView(curtainView, params)
-                        Log.i(TAG, "Screen Curtain Activated")
+                        speak("Screen curtain enabled")
                     }
                 } else {
                     curtainView?.let {
                         windowManager?.removeView(it)
                         curtainView = null
-                        Log.i(TAG, "Screen Curtain Deactivated")
+                        speak("Screen curtain disabled")
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error toggling Screen Curtain overlay", e)
             }
         }
+    }
+
+    fun toggleScreenCurtain() {
+        val newState = !Settings.SCREEN_CURTAIN_ENABLED
+        Settings.SCREEN_CURTAIN_ENABLED = newState
+        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("SCREEN_CURTAIN_ENABLED", newState).apply()
     }
 
     fun playAudioBeep(toneType: Int = ToneGenerator.TONE_PROP_BEEP) {
@@ -247,32 +215,13 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun playAudioBeepForEvent(eventType: String) {
-        executorService.execute {
-            try {
-                if (Python.isStarted()) {
-                    val py = Python.getInstance()
-                    val settingsModule = py.getModule("settings")
-                    val activeSettings = settingsModule["active_settings"]
-                    val soundTheme = activeSettings?.get("SOUND_THEME")?.toString() ?: "classic"
-                    val themeMap = activeSettings?.get("SOUND_THEME_MAP")
-                    val toneType = themeMap?.get(soundTheme)?.get(eventType)?.toInt() ?: ToneGenerator.TONE_PROP_BEEP
-                    playAudioBeep(toneType)
-                } else {
-                    playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error getting tone for event $eventType", e)
-                playAudioBeep(ToneGenerator.TONE_PROP_BEEP)
-            }
-        }
+        val toneType = Settings.SOUND_THEME_MAP[Settings.SOUND_THEME]?.get(eventType) ?: ToneGenerator.TONE_PROP_BEEP
+        playAudioBeep(toneType)
     }
 
     fun playDynamicScrollBeep(percentage: Float) {
         executorService.execute {
             try {
-                // Map percentage (0.0 to 1.0) to a frequency.
-                // 0.0 (top) = 1500 Hz, 1.0 (bottom) = 500 Hz
-                // Higher pitch when scrolling up (closer to 0), lower when down.
                 val clampedPercent = Math.max(0.0f, Math.min(1.0f, percentage))
                 val hz = 1500.0 - (clampedPercent * 1000.0)
                 
@@ -282,7 +231,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 val sample = ShortArray(numSamples)
                 val twoPi = 2.0 * Math.PI
                 
-                // Apply a simple envelope to prevent clicking sounds at start/end
                 for (i in 0 until numSamples) {
                     val floatVal = Math.sin(twoPi * i / (sampleRate / hz))
                     var envelope = 1.0
@@ -290,7 +238,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     if (i < fadeSamples) envelope = i.toDouble() / fadeSamples
                     else if (i > numSamples - fadeSamples) envelope = (numSamples - i).toDouble() / fadeSamples
                     
-                    sample[i] = (floatVal * envelope * Short.MAX_VALUE * 0.5).toInt().toShort() // 50% volume
+                    sample[i] = (floatVal * envelope * Short.MAX_VALUE * 0.5).toInt().toShort()
                 }
 
                 val audioTrack = android.media.AudioTrack.Builder()
@@ -320,28 +268,11 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     fun playHapticFeedback(durationMs: Long = 30L) {
         try {
-            if (vibrator != null && vibrator!!.hasVibrator()) {
+            if (Settings.HAPTIC_FEEDBACK_ENABLED && vibrator != null && vibrator!!.hasVibrator()) {
                 vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error triggering vibration", e)
-        }
-    }
-
-    fun getDeviceStatusString(): String {
-        return try {
-            val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-            val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            val batteryStatus = registerReceiver(null, batteryFilter)
-            val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            val batteryPct = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
-            
-            val batteryInfo = if (batteryPct >= 0) "Battery $batteryPct percent" else ""
-            "$timeStr, $batteryInfo".trim(' ', ',')
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching device status", e)
-            "Status unavailable"
         }
     }
 
@@ -356,29 +287,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     override fun onGesture(gestureId: Int): Boolean {
         if (!isScreenOn) return false
-
         stopSpeech()
         playHapticFeedback(25L)
-
-        if (pythonModule != null) {
-            try {
-                val handled = pythonModule?.callAttr("on_gesture", this, gestureId)?.toBoolean() ?: false
-                if (handled) return true
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in Python on_gesture", e)
-            }
-        }
-
-        // Fallback if Python module fails
-        return when (gestureId) {
-            GESTURE_SWIPE_RIGHT -> performFocusNext()
-            GESTURE_SWIPE_LEFT -> performFocusPrevious()
-            GESTURE_DOUBLE_TAP -> performNodeClick()
-            else -> super.onGesture(gestureId)
-        }
+        return eventHandler.handleGesture(gestureId)
     }
-
-    // --- TALKBACK LOW-LEVEL ACCESSIBILITY TREE NAVIGATION ENGINE ---
 
     private fun collectFocusableNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>, depth: Int = 0) {
         if (node == null || !node.isVisibleToUser || depth > 30) return
@@ -387,9 +299,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val isInteractive = node.isClickable || node.isCheckable || node.isFocusable || node.isHeading
 
         if (hasText || isInteractive) {
-            // We obtain a copy to keep in the list so we can recycle original node's children safely.
-            val nodeCopy = AccessibilityNodeInfo.obtain(node)
-            list.add(nodeCopy)
+            list.add(AccessibilityNodeInfo.obtain(node))
         }
 
         for (i in 0 until node.childCount) {
@@ -403,7 +313,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     fun performFocusNext(): Boolean {
         val root = rootInActiveWindow ?: return false
-        
         val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
@@ -428,8 +337,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         var success = false
         if (targetIndex < nodes.size) {
             for (i in targetIndex until nodes.size) {
-                val targetNode = nodes[i]
-                success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                success = nodes[i].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
                 if (success) {
                     playAudioBeepForEvent("focus")
                     break
@@ -444,18 +352,13 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             speak("End of screen")
         }
 
-        // Recycle all collected nodes
-        for (node in nodes) {
-            node.recycle()
-        }
+        nodes.forEach { it.recycle() }
         root.recycle()
-
         return success
     }
 
     fun performFocusPrevious(): Boolean {
         val root = rootInActiveWindow ?: return false
-        
         val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
@@ -466,7 +369,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             return false
         }
 
-        var targetIndex = nodes.size - 1  // Default: focus last element if nothing focused
+        var targetIndex = nodes.size - 1
         if (currentFocused != null) {
             for (i in nodes.indices) {
                 if (nodes[i] == currentFocused) {
@@ -480,8 +383,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         var success = false
         if (targetIndex >= 0 && targetIndex < nodes.size) {
             for (i in targetIndex downTo 0) {
-                val targetNode = nodes[i]
-                success = targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                success = nodes[i].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
                 if (success) {
                     playAudioBeepForEvent("focus")
                     break
@@ -496,23 +398,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             speak("Top of screen")
         }
 
-        // Recycle all collected nodes
-        for (node in nodes) {
-            node.recycle()
-        }
-        root.recycle()
-
-        return success
-    }
-
-    fun clearFocus(): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        var success = false
-        if (currentFocused != null) {
-            success = currentFocused.performAction(AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
-            currentFocused.recycle()
-        }
+        nodes.forEach { it.recycle() }
         root.recycle()
         return success
     }
@@ -538,30 +424,16 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         return longClicked
     }
 
-    fun performGlobalBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
-    fun performGlobalHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
-    fun performGlobalRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
-    fun performGlobalNotifications(): Boolean = performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-    fun performGlobalQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
-
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (!isScreenOn) return
-
-        if (pythonModule != null) {
-            // Process on background thread to prevent UI freezing if Python is slow
-            val eventCopy = AccessibilityEvent.obtain(event)
-            executorService.execute {
-                try {
-                    pythonModule?.callAttr("on_accessibility_event", this, eventCopy)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in Python on_accessibility_event", e)
-                } finally {
-                    try {
-                        eventCopy.recycle()
-                    } catch (e: Exception) {
-                        // ignore
-                    }
-                }
+        val eventCopy = AccessibilityEvent.obtain(event)
+        executorService.execute {
+            try {
+                eventHandler.processEvent(eventCopy)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in native onAccessibilityEvent", e)
+            } finally {
+                eventCopy.recycle()
             }
         }
     }
@@ -569,15 +441,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     override fun onInterrupt() {
         Log.i(TAG, "Service Interrupted")
         stopSpeech()
-        if (pythonModule != null) {
-            executorService.execute {
-                try {
-                    pythonModule?.callAttr("on_interrupt")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in Python on_interrupt", e)
-                }
-            }
-        }
     }
 
     override fun onDestroy() {
@@ -596,32 +459,165 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         executorService.shutdown()
     }
 
+    // AI & Utility Actions 
+    
+    fun readDeviceStatus() {
+        val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+        val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val batteryStatus = registerReceiver(null, batteryFilter)
+        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPct = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
+        
+        val batteryInfo = if (batteryPct >= 0) "Battery $batteryPct percent" else ""
+        speak("$timeStr, $batteryInfo".trim(' ', ','))
+    }
+
+    fun toggleInputHelp() {
+        Settings.INPUT_HELP_MODE = !Settings.INPUT_HELP_MODE
+        val state = if (Settings.INPUT_HELP_MODE) "Enabled" else "Disabled"
+        speak("Input Help Practice Mode $state")
+    }
+
+    fun togglePunctuationVerbosity() {
+        val options = listOf("none", "some", "all")
+        val idx = options.indexOf(Settings.PUNCTUATION_VERBOSITY)
+        val nextIdx = (idx + 1) % options.size
+        Settings.PUNCTUATION_VERBOSITY = options[nextIdx]
+        speak("Punctuation verbosity set to ${options[nextIdx]}")
+    }
+
+    fun startVoiceCommand() {
+        speak("Voice commands not fully implemented natively yet. Please use menu.")
+    }
+
+    fun readFromTop() {
+        val root = rootInActiveWindow ?: return
+        readingNodes.forEach { it.recycle() }
+        readingNodes.clear()
+        collectFocusableNodes(root, readingNodes)
+        root.recycle()
+        
+        if (readingNodes.isNotEmpty()) {
+            Settings.CONTINUOUS_READING_ACTIVE = true
+            readingIndex = 0
+            speak("Starting continuous reading")
+            readNextNode()
+        }
+    }
+
+    fun readFromHere() {
+        val root = rootInActiveWindow ?: return
+        val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        
+        readingNodes.forEach { it.recycle() }
+        readingNodes.clear()
+        collectFocusableNodes(root, readingNodes)
+        
+        readingIndex = 0
+        if (currentFocused != null) {
+            for (i in readingNodes.indices) {
+                if (readingNodes[i] == currentFocused) {
+                    readingIndex = i
+                    break
+                }
+            }
+            currentFocused.recycle()
+        }
+        root.recycle()
+        
+        if (readingNodes.isNotEmpty()) {
+            Settings.CONTINUOUS_READING_ACTIVE = true
+            speak("Starting continuous reading from here")
+            readNextNode()
+        }
+    }
+
+    private fun readNextNode() {
+        if (!Settings.CONTINUOUS_READING_ACTIVE) return
+        if (readingIndex < readingNodes.size) {
+            val node = readingNodes[readingIndex]
+            node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+            val text = NodeParser.formatNodeSpeech(node)
+            
+            readingIndex++
+            
+            if (text.isNotBlank()) {
+                speak(text, flush = true, isContinuous = true)
+            } else {
+                // If this node had no text, immediately skip to the next one
+                mainHandler.post { readNextNode() }
+            }
+        } else {
+            Settings.CONTINUOUS_READING_ACTIVE = false
+            speak("Finished reading screen")
+        }
+    }
+
+    private fun getFullScreenText(): String {
+        val root = rootInActiveWindow ?: return ""
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        collectFocusableNodes(root, nodes)
+        val textList = nodes.mapNotNull { NodeParser.getNodeRawText(it).takeIf { it.isNotBlank() } }
+        nodes.forEach { it.recycle() }
+        root.recycle()
+        return textList.joinToString("\n")
+    }
+
+    fun aiSummarizeScreen() {
+        val text = getFullScreenText()
+        if (text.isEmpty()) {
+            speak("No text found to summarize.")
+            return
+        }
+        speak("Summarizing screen...")
+        AiService.summarizeScreenAsync(text, { summary -> 
+            speak(summary) 
+        }, { err -> 
+            speak(err) 
+        })
+    }
+
+    fun aiSimplifyScreen() {
+        val text = getFullScreenText()
+        if (text.isEmpty()) {
+            speak("No text found to simplify.")
+            return
+        }
+        speak("Simplifying screen...")
+        AiService.rewriteSimplifiedAsync(text, { simplified -> 
+            speak(simplified) 
+        }, { err -> 
+            speak(err) 
+        })
+    }
+
     fun captureScreenForAI() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             takeScreenshot(android.view.Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     try {
                         val hwBuffer = screenshot.hardwareBuffer
-                        try {
-                            val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                            if (bitmap != null) {
-                                val outputStream = java.io.ByteArrayOutputStream()
-                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
-                                val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
-                                
-                                executorService.execute {
-                                    try {
-                                        pythonModule?.callAttr("on_screenshot_captured", this@IndianScreenReaderService, base64)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "Error passing screenshot to python", e)
-                                    }
+                        executorService.execute {
+                            try {
+                                val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                                if (bitmap != null) {
+                                    val outputStream = java.io.ByteArrayOutputStream()
+                                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                                    val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
+                                    
+                                    AiService.describeImageB64Async(base64, { desc ->
+                                        speak(desc)
+                                    }, { err ->
+                                        speak(err)
+                                    })
+                                    bitmap.recycle()
+                                } else {
+                                    speak("Failed to process screenshot")
                                 }
-                                bitmap.recycle()
-                            } else {
-                                speak("Failed to process screenshot")
+                            } finally {
+                                hwBuffer.close()
                             }
-                        } finally {
-                            hwBuffer.close()
                         }
                     } catch (e: Exception) {
                         speak("Error capturing screenshot")
@@ -632,7 +628,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 }
             })
         } else {
-            speak("Screen capture requires Android 11 or higher")
+            speak("Screen capture requires Android 12 or higher")
         }
     }
 }

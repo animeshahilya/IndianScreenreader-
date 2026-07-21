@@ -44,8 +44,8 @@ class SettingsActivity : AppCompatActivity() {
             editor.putBoolean("INPUT_HELP_MODE", switchInputHelp.isChecked)
             editor.putBoolean("DEDUPLICATE_SPEECH", switchDeduplicate.isChecked)
             
-            // Note: We don't instantly restart the Python engine here. 
-            // We'll update the Python `settings.py` so it dynamically pulls from SharedPreferences!
+            // Note: Our SharedPreferences listener in IndianScreenReaderService will instantly catch this
+            // and reload the native Settings.kt!
             editor.apply()
             
             Toast.makeText(this, "Settings Saved. Restart Screenreader if necessary.", Toast.LENGTH_SHORT).show()
