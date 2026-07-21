@@ -60,12 +60,10 @@ object NodeParser {
 
     private fun applyPronunciationDict(text: String): String {
         var result = text
-        val lowerText = text.lowercase()
         Settings.PRONUNCIATION_DICT.forEach { (key, replacement) ->
-            if (lowerText.contains(key)) {
-                // simple replacement for now, avoiding complex regex
-                result = result.replace(key, replacement, ignoreCase = true)
-            }
+            // Use word-boundary regex to avoid replacing substrings inside words
+            // e.g. "pan" should not match inside "Japan"
+            result = result.replace(Regex("(?i)\\b${Regex.escape(key)}\\b"), replacement)
         }
         return result
     }
@@ -82,8 +80,13 @@ object NodeParser {
 
     private fun formatCapitalization(text: String, mode: String): String {
         if (text.isBlank() || mode == "none") return text
+        // Single uppercase letter: announce "Cap X"
         if (text.length == 1 && text.first().isUpperCase()) {
             if (mode == "prefix") return "Cap $text"
+        }
+        // All-caps word (2+ uppercase letters, no lowercase): announce "Caps: WORD"
+        if (mode == "prefix" && text.length > 1 && text.all { it.isUpperCase() || !it.isLetter() } && text.any { it.isUpperCase() }) {
+            return "Caps: $text"
         }
         return text
     }
@@ -187,18 +190,21 @@ object NodeParser {
             return textParts.joinToString(", ")
         }
 
-        // Recursively search children if no direct text
+        // Recursively search children if no direct text — no arbitrary child limit
         val childCount = node.childCount
         if (childCount > 0) {
             val childTexts = mutableListOf<String>()
-            for (i in 0 until minOf(childCount, 4)) {
+            for (i in 0 until childCount) {
                 val child = node.getChild(i)
                 if (child != null) {
-                    val childText = getNodeRawText(child, depth + 1)
-                    if (childText.isNotBlank()) {
-                        childTexts.add(childText)
+                    try {
+                        val childText = getNodeRawText(child, depth + 1)
+                        if (childText.isNotBlank()) {
+                            childTexts.add(childText)
+                        }
+                    } finally {
+                        child.recycle()
                     }
-                    child.recycle()
                 }
             }
             if (childTexts.isNotEmpty()) {

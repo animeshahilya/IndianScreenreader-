@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.IndianScreenreader" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.IndianScreenreader" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/navy_primary</item>
         <item name="colorPrimaryVariant">@color/navy_primary_dark</item>

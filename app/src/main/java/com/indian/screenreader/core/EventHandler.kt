@@ -1,6 +1,7 @@
 package com.indian.screenreader.core
 
 import android.view.accessibility.AccessibilityEvent
+import android.accessibilityservice.AccessibilityService
 import com.indian.screenreader.IndianScreenReaderService
 
 class EventHandler(private val service: IndianScreenReaderService) {
@@ -32,6 +33,14 @@ class EventHandler(private val service: IndianScreenReaderService) {
                 eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER ||
                 eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
                 
+                // If user touches the screen, cancel any active autonomous states
+                if (eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER || eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
+                    if (Settings.CONTINUOUS_READING_ACTIVE) {
+                        Settings.CONTINUOUS_READING_ACTIVE = false
+                        service.stopSpeech()
+                    }
+                }
+
                 if (isFocusThrottled()) return
 
                 val spokenText = NodeParser.formatNodeSpeech(source)
@@ -101,59 +110,6 @@ class EventHandler(private val service: IndianScreenReaderService) {
         }
     }
 
-    private fun openIndianMenu() {
-        Settings.INDIAN_MENU_OPEN = true
-        Settings.INDIAN_MENU_SELECTED_INDEX = 0
-        val currentItem = Settings.INDIAN_MENU_ITEMS[0]
-        service.speak("Indian Menu opened. $currentItem. Swipe right for next item, double tap to select.")
-    }
-
-    private fun closeIndianMenu() {
-        Settings.INDIAN_MENU_OPEN = false
-        service.speak("Indian Menu closed.")
-    }
-
-    private fun navigateIndianMenu(direction: Int) {
-        val totalItems = Settings.INDIAN_MENU_ITEMS.size
-        Settings.INDIAN_MENU_SELECTED_INDEX = if (direction > 0) {
-            (Settings.INDIAN_MENU_SELECTED_INDEX + 1) % totalItems
-        } else {
-            val next = Settings.INDIAN_MENU_SELECTED_INDEX - 1
-            if (next < 0) totalItems - 1 else next
-        }
-
-        val itemText = Settings.INDIAN_MENU_ITEMS[Settings.INDIAN_MENU_SELECTED_INDEX]
-        service.speak(itemText)
-    }
-
-    private fun executeIndianMenuSelection() {
-        val idx = Settings.INDIAN_MENU_SELECTED_INDEX
-        Settings.INDIAN_MENU_OPEN = false
-
-        when (idx) {
-            0 -> service.aiSummarizeScreen()
-            1 -> {
-                Settings.AUTO_TRANSLATE_ENABLED = !Settings.AUTO_TRANSLATE_ENABLED
-                val state = if (Settings.AUTO_TRANSLATE_ENABLED) "Enabled" else "Disabled"
-                service.speak("AI Translation $state")
-            }
-            2 -> {
-                service.speak("Capturing screen for AI Vision description...")
-                service.captureScreenForAI()
-            }
-            3 -> service.readDeviceStatus()
-            4 -> service.toggleInputHelp()
-            5 -> cycleGranularity(1)
-            6 -> service.togglePunctuationVerbosity()
-            7 -> service.toggleScreenCurtain()
-            8 -> service.readFromHere()
-            9 -> service.readFromTop()
-            10 -> service.startVoiceCommand()
-            11 -> service.aiSimplifyScreen()
-            12 -> service.speak("Indian Menu closed.")
-        }
-    }
-
     private fun cycleGranularity(step: Int) {
         val granularities = Settings.GRANULARITIES
         Settings.CURRENT_GRANULARITY_INDEX = (Settings.CURRENT_GRANULARITY_INDEX + step + granularities.size) % granularities.size
@@ -163,14 +119,14 @@ class EventHandler(private val service: IndianScreenReaderService) {
 
     private fun getGestureDescription(gestureId: Int): String {
         return when (gestureId) {
-            1 -> "Focus Next"
-            2 -> "Focus Previous"
-            3 -> "Granularity Up"
-            4 -> "Granularity Down"
-            9 -> "Open Indian Context Menu"
-            10 -> "Read From Top"
-            11 -> "Read From Here"
-            12 -> "Voice Command Mode"
+            4 -> "Focus Next"
+            3 -> "Focus Previous"
+            1 -> "Granularity Up"
+            2 -> "Granularity Down"
+            14 -> "Open Indian Context Menu"
+            13 -> "Home"
+            16 -> "Read From Here"
+            15 -> "Back"
             17 -> "Click / Activate Element"
             18 -> "Long Click Element"
             else -> "Custom Action $gestureId"
@@ -178,15 +134,6 @@ class EventHandler(private val service: IndianScreenReaderService) {
     }
 
     fun handleGesture(gestureId: Int): Boolean {
-        if (Settings.INDIAN_MENU_OPEN) {
-            return when (gestureId) {
-                1 -> { navigateIndianMenu(1); true }
-                2 -> { navigateIndianMenu(-1); true }
-                17, 18 -> { executeIndianMenuSelection(); true }
-                else -> false
-            }
-        }
-
         if (Settings.CONTINUOUS_READING_ACTIVE) {
             Settings.CONTINUOUS_READING_ACTIVE = false
             service.speak("Stopped reading")
@@ -202,7 +149,7 @@ class EventHandler(private val service: IndianScreenReaderService) {
         val actionName = Settings.GESTURE_MAP[gestureId] ?: ""
 
         when (actionName) {
-            "open_indian_menu" -> { openIndianMenu(); return true }
+            "open_indian_menu" -> { service.showVisibleContextMenu(); return true }
             "toggle_screen_curtain" -> { service.toggleScreenCurtain(); return true }
             "focus_next" -> return service.performFocusNext()
             "focus_prev" -> return service.performFocusPrevious()
@@ -210,18 +157,20 @@ class EventHandler(private val service: IndianScreenReaderService) {
             "granularity_down" -> { cycleGranularity(-1); return true }
             "click" -> return service.performNodeClick()
             "long_click" -> return service.performNodeLongClick()
-            "read_from_top" -> { service.readFromTop(); return true }
             "read_from_here" -> { service.readFromHere(); return true }
-            "voice_command" -> { service.startVoiceCommand(); return true }
+            "global_home" -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); return true }
+            "global_back" -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); return true }
         }
 
         // Fallback to standard
         return when (gestureId) {
-            1 -> service.performFocusNext()
-            2 -> service.performFocusPrevious()
-            3 -> { cycleGranularity(1); true }
-            4 -> { cycleGranularity(-1); true }
-            9 -> { openIndianMenu(); true }
+            4 -> service.performFocusNext()
+            3 -> service.performFocusPrevious()
+            1 -> { cycleGranularity(1); true }
+            2 -> { cycleGranularity(-1); true }
+            14 -> { service.showVisibleContextMenu(); true }
+            13 -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); true }
+            15 -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); true }
             else -> false
         }
     }

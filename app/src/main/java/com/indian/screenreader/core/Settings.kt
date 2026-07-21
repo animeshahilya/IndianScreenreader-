@@ -32,9 +32,7 @@ object Settings {
     var ANNOUNCE_LIST_COUNT = true
     var ANNOUNCE_VIEW_IDS = false
 
-    // Indian Menu State
-    var INDIAN_MENU_OPEN = false
-    var INDIAN_MENU_SELECTED_INDEX = 0
+    // Indian Menu State (visual overlay — no state machine needed)
     val INDIAN_MENU_ITEMS = listOf(
         "1. AI Screen Summary",
         "2. AI Language Translation",
@@ -86,7 +84,7 @@ object Settings {
     )
 
     // Feature 2: Continuous Reading
-    var CONTINUOUS_READING_ACTIVE = false
+    @Volatile var CONTINUOUS_READING_ACTIVE = false
 
     // Feature 3: Sound Theme
     var SOUND_THEME = "classic"
@@ -158,16 +156,16 @@ object Settings {
         )
     )
 
-    // Gesture Remapping Dictionary
-    val GESTURE_MAP = mapOf(
-        1 to "focus_next",           // SWIPE_RIGHT
-        2 to "focus_prev",           // SWIPE_LEFT
-        3 to "granularity_up",       // SWIPE_UP
-        4 to "granularity_down",     // SWIPE_DOWN
-        9 to "open_indian_menu",     // SWIPE_UP_AND_RIGHT (Indian Context Menu)
-        10 to "read_from_top",       // SWIPE_UP_AND_LEFT
-        11 to "read_from_here",      // SWIPE_DOWN_AND_RIGHT
-        12 to "voice_command",       // SWIPE_DOWN_AND_LEFT -> Voice Command toggle
+    // Gesture Remapping Dictionary — mutable so it can be updated from prefs
+    var GESTURE_MAP: MutableMap<Int, String> = mutableMapOf(
+        4 to "focus_next",           // SWIPE_RIGHT
+        3 to "focus_prev",           // SWIPE_LEFT
+        1 to "granularity_up",       // SWIPE_UP
+        2 to "granularity_down",     // SWIPE_DOWN
+        14 to "open_indian_menu",    // SWIPE_UP_AND_RIGHT (Indian Context Menu)
+        16 to "read_from_here",      // SWIPE_DOWN_AND_RIGHT
+        13 to "global_home",         // SWIPE_UP_AND_LEFT (Home)
+        15 to "global_back",         // SWIPE_DOWN_AND_LEFT (Back)
         17 to "click",               // DOUBLE_TAP
         18 to "long_click"           // DOUBLE_TAP_AND_HOLD
     )
@@ -178,5 +176,10 @@ object Settings {
         SCREEN_CURTAIN_ENABLED = prefs.getBoolean("SCREEN_CURTAIN_ENABLED", false)
         INPUT_HELP_MODE = prefs.getBoolean("INPUT_HELP_MODE", false)
         DEDUPLICATE_SPEECH = prefs.getBoolean("DEDUPLICATE_SPEECH", true)
+        SPEECH_RATE = prefs.getFloat("SPEECH_RATE", 1.0f)
+        SPEECH_PITCH = prefs.getFloat("SPEECH_PITCH", 1.0f)
+        HAPTIC_FEEDBACK_ENABLED = prefs.getBoolean("HAPTIC_FEEDBACK_ENABLED", true)
+        PUNCTUATION_VERBOSITY = prefs.getString("PUNCTUATION_VERBOSITY", "all") ?: "all"
+        TRANSLATION_TARGET_LANGUAGE = prefs.getString("TRANSLATION_TARGET_LANGUAGE", "Hindi") ?: "Hindi"
     }
 }

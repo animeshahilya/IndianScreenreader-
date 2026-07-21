@@ -13,7 +13,7 @@
         android:allowBackup="true"
         android:label="Indian Screenreader"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+        android:theme="@style/Theme.IndianScreenreader">
 
         <service
             android:name=".IndianScreenReaderService"

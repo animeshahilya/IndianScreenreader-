@@ -13,9 +13,13 @@ object AiService {
     private const val TAG = "AiService"
     private const val GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     
-    private val executor = Executors.newSingleThreadExecutor()
+    // Separate executors so translation never blocks summarize/describe and vice versa
+    private val aiExecutor = Executors.newFixedThreadPool(2)
+    private val translateExecutor = Executors.newSingleThreadExecutor()
     private val isSummarizing = AtomicBoolean(false)
     private val isDescribingImage = AtomicBoolean(false)
+    // Tracks the utterance ID of the last translation so stale results can be dropped
+    @Volatile private var latestTranslationId = 0L
 
     private fun getApiKey(): String {
         return Settings.GEMINI_API_KEY.trim()
@@ -102,7 +106,7 @@ object AiService {
             return
         }
 
-        executor.execute {
+        aiExecutor.execute {
             try {
                 val summary = summarizeScreen(screenText)
                 callback(summary)
@@ -129,13 +133,21 @@ object AiService {
             callback(text)
             return
         }
-        executor.execute {
+        // Stamp this translation request; if a newer one arrives, the result is discarded
+        val myId = System.currentTimeMillis()
+        latestTranslationId = myId
+
+        translateExecutor.execute {
             try {
                 val prompt = "Translate the following text accurately into $targetLanguage. " +
                         "Output ONLY the translated string without commentary:\n\n$text"
-                callback(makeGeminiRequest(prompt))
+                val result = makeGeminiRequest(prompt)
+                // Only deliver if no newer translation has been requested
+                if (latestTranslationId == myId) {
+                    callback(result)
+                }
             } catch (e: Exception) {
-                callback(text) // fallback
+                if (latestTranslationId == myId) callback(text) // fallback to original
             }
         }
     }
@@ -145,7 +157,7 @@ object AiService {
             callback(text)
             return
         }
-        executor.execute {
+        aiExecutor.execute {
             try {
                 val prompt = "You are an accessibility assistant for visually impaired users. " +
                         "Simplify and rewrite the following text so it is very easy to understand:\n\n$text"
@@ -161,7 +173,7 @@ object AiService {
             errorCallback("Already describing an image. Please wait.")
             return
         }
-        executor.execute {
+        aiExecutor.execute {
             try {
                 val prompt = "Describe what is in this image concisely in 1 or 2 sentences for a blind user."
                 callback(makeGeminiRequest(prompt, base64Jpeg))
