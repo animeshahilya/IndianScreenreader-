@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -108,8 +109,10 @@ object AiService {
             return
         }
 
-        // Check response cache using length + hash to prevent collisions
-        val cacheKey = "${screenText.length}_${screenText.hashCode()}"
+        // Check response cache using SHA-256 hash to prevent collisions
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(screenText.toByteArray())
+        val cacheKey = hashBytes.joinToString("") { "%02x".format(it) }
         val cached = summaryCache.get(cacheKey)
         if (cached != null) {
             callback("(Cached) $cached")

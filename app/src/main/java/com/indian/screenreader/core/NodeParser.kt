@@ -94,13 +94,19 @@ object NodeParser {
             formatIndianNumber(match.value)
         }
 
-        // 3. Format 6-digit numbers as Lakh UNLESS in OTP/PIN/verification context
+        // 3. Format 6-digit numbers as Lakh UNLESS in OTP/PIN/verification context or if it's a standalone 6-digit number
         val lowerText = text.lowercase()
         val isOtpContext = lowerText.contains("otp") || lowerText.contains("pin") || lowerText.contains("code") ||
-                lowerText.contains("verification") || lowerText.contains("passcode") || lowerText.contains("one time password")
+                lowerText.contains("verification") || lowerText.contains("passcode") || lowerText.contains("one time password") ||
+                text.trim().matches(Regex("^\\d{6}$"))
 
-        if (!isOtpContext) {
-            val sixDigitRegex = Regex("\\b\\d{6}\\b")
+        val sixDigitRegex = Regex("\\b\\d{6}\\b")
+        if (isOtpContext) {
+            result = sixDigitRegex.replace(result) { match ->
+                // Space out digits for clear OTP reading (e.g., "1 2 3 4 5 6")
+                match.value.toCharArray().joinToString(" ")
+            }
+        } else {
             result = sixDigitRegex.replace(result) { match ->
                 formatIndianNumber(match.value)
             }

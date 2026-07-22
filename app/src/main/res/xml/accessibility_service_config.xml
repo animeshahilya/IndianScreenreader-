@@ -2,7 +2,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackSpoken|feedbackHaptic|feedbackAudible"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagRequestFilterKeyEvents|flagRequestTouchExplorationMode|flagReportViewIds|flagIncludeNotImportantViews|flagEnableAccessibilityVolume"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagRequestFilterKeyEvents|flagRequestTouchExplorationMode|flagRequestMultiFingerGestures|flagReportViewIds|flagIncludeNotImportantViews|flagEnableAccessibilityVolume"
     android:canRetrieveWindowContent="true"
     android:canRequestFilterKeyEvents="true"
     android:canRequestTouchExplorationMode="true"

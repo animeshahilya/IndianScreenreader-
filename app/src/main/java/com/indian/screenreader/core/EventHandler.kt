@@ -182,6 +182,8 @@ class EventHandler(private val service: IndianScreenReaderService) {
             "click" -> return service.performNodeClick()
             "long_click" -> return service.performNodeLongClick()
             "read_from_here" -> { service.readFromHere(); return true }
+            "read_from_top" -> { service.readFromTop(); return true }
+            "ai_summary" -> { service.aiSummarizeScreen(); return true }
             "global_home" -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME); return true }
             "global_back" -> { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); return true }
         }

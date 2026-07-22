@@ -185,7 +185,14 @@ object Settings {
         13 to "global_home",         // SWIPE_UP_AND_LEFT (Home)
         15 to "global_back",         // SWIPE_DOWN_AND_LEFT (Back)
         17 to "click",               // DOUBLE_TAP
-        18 to "long_click"           // DOUBLE_TAP_AND_HOLD
+        18 to "long_click",          // DOUBLE_TAP_AND_HOLD
+        19 to "toggle_screen_curtain", // 2-Finger Single Tap
+        20 -> "read_from_top",         // 2-Finger Double Tap
+        21 -> "ai_summary",            // 2-Finger Triple Tap
+        22 -> "focus_next",            // 3-Finger Swipe Right
+        23 -> "focus_prev",            // 3-Finger Swipe Left
+        24 -> "granularity_up",        // 3-Finger Swipe Up
+        25 -> "granularity_down"       // 3-Finger Swipe Down
     ))
 
     var EMERGENCY_CONTACT_NUMBER = ""
@@ -200,7 +207,14 @@ object Settings {
         13 to "Swipe Up & Left",
         15 to "Swipe Down & Left",
         17 to "Double Tap",
-        18 to "Double Tap & Hold"
+        18 to "Double Tap & Hold",
+        19 to "2-Finger Single Tap",
+        20 to "2-Finger Double Tap",
+        21 to "2-Finger Triple Tap",
+        22 to "3-Finger Swipe Right",
+        23 to "3-Finger Swipe Left",
+        24 to "3-Finger Swipe Up",
+        25 to "3-Finger Swipe Down"
     )
 
     val GESTURE_ACTIONS = listOf(
@@ -213,7 +227,10 @@ object Settings {
         "global_home" to "Home System Action",
         "global_back" to "Back System Action",
         "click" to "Click Item",
-        "long_click" to "Long Click Item"
+        "long_click" to "Long Click Item",
+        "toggle_screen_curtain" to "Toggle Screen Curtain",
+        "read_from_top" to "Read From Top",
+        "ai_summary" to "AI Screen Summary"
     )
 
     fun saveGestureMap(prefs: SharedPreferences) {
