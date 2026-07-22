@@ -81,10 +81,19 @@ object NodeParser {
     fun applyIndianNumberFormatting(text: String): String {
         if (text.isBlank()) return text
         var result = text.replace("₹", " rupees ").replace("Rs.", " rupees ").replace("INR", " rupees ")
-        val regex = Regex("\\b\\d{1,2}(,\\d{2})*(,\\d{3})\\b|\\b\\d{5,10}\\b")
-        result = regex.replace(result) { match ->
+        
+        // 1. Format numbers with explicit Indian commas (e.g., 5,00,000 or 1,00,00,000)
+        val indianCommaRegex = Regex("\\b\\d{1,2}(,\\d{2})*(,\\d{3})\\b")
+        result = indianCommaRegex.replace(result) { match ->
             formatIndianNumber(match.value)
         }
+
+        // 2. Format standalone 5, 7, 8, 9 digit numbers — EXCLUDING 6-digit OTPs and 10-digit phone numbers
+        val standaloneNumberRegex = Regex("\\b(\\d{5}|\\d{7,9})\\b")
+        result = standaloneNumberRegex.replace(result) { match ->
+            formatIndianNumber(match.value)
+        }
+
         return result.replace(Regex("\\s+"), " ").trim()
     }
 

@@ -1,90 +1,155 @@
 package com.indian.screenreader
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputEditText
+import com.indian.screenreader.core.Settings
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var prefs: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Apply our beautiful Navy theme
         setTheme(R.style.Theme_IndianScreenreader)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
-        // Initialize SharedPreferences
         prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
 
+        // Request runtime permissions for Voice Commands (RECORD_AUDIO) and Emergency SOS (SEND_SMS)
+        val missingPermissions = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(Manifest.permission.SEND_SMS)
+        }
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 101)
+        }
+
         val etApiKey = findViewById<TextInputEditText>(R.id.etApiKey)
+        val etEmergencyContact = findViewById<TextInputEditText>(R.id.etEmergencyContact)
         val switchAutoTranslate = findViewById<MaterialSwitch>(R.id.switchAutoTranslate)
         val switchScreenCurtain = findViewById<MaterialSwitch>(R.id.switchScreenCurtain)
         val switchInputHelp = findViewById<MaterialSwitch>(R.id.switchInputHelp)
         val switchDeduplicate = findViewById<MaterialSwitch>(R.id.switchDeduplicate)
         val btnSave = findViewById<Button>(R.id.btnSave)
 
-        val tvSpeechRateLabel = findViewById<android.widget.TextView>(R.id.tvSpeechRateLabel)
-        val sbSpeechRate = findViewById<android.widget.SeekBar>(R.id.sbSpeechRate)
-        val tvSpeechPitchLabel = findViewById<android.widget.TextView>(R.id.tvSpeechPitchLabel)
-        val sbSpeechPitch = findViewById<android.widget.SeekBar>(R.id.sbSpeechPitch)
+        val tvSpeechRateLabel = findViewById<TextView>(R.id.tvSpeechRateLabel)
+        val sbSpeechRate = findViewById<SeekBar>(R.id.sbSpeechRate)
+        val tvSpeechPitchLabel = findViewById<TextView>(R.id.tvSpeechPitchLabel)
+        val sbSpeechPitch = findViewById<SeekBar>(R.id.sbSpeechPitch)
+        val spinnerTtsLanguage = findViewById<Spinner>(R.id.spinnerTtsLanguage)
+
+        val spinnerGestureSelect = findViewById<Spinner>(R.id.spinnerGestureSelect)
+        val spinnerActionSelect = findViewById<Spinner>(R.id.spinnerActionSelect)
+        val btnAssignGesture = findViewById<Button>(R.id.btnAssignGesture)
 
         // Load existing values
         etApiKey.setText(prefs.getString("GEMINI_API_KEY", ""))
+        etEmergencyContact.setText(prefs.getString("EMERGENCY_CONTACT_NUMBER", ""))
         switchAutoTranslate.isChecked = prefs.getBoolean("AUTO_TRANSLATE_ENABLED", false)
         switchScreenCurtain.isChecked = prefs.getBoolean("SCREEN_CURTAIN_ENABLED", false)
         switchInputHelp.isChecked = prefs.getBoolean("INPUT_HELP_MODE", false)
         switchDeduplicate.isChecked = prefs.getBoolean("DEDUPLICATE_SPEECH", true)
 
+        // Math.round fixes float rounding drift bug
         val initialRate = prefs.getFloat("SPEECH_RATE", 1.0f)
-        val rateProgress = ((initialRate - 0.5f) / 0.1f).toInt().coerceIn(0, 20)
+        val rateProgress = Math.round((initialRate - 0.5f) / 0.1f).coerceIn(0, 20)
         sbSpeechRate.progress = rateProgress
-        tvSpeechRateLabel.text = String.format("Speech Rate: %.1fx", initialRate)
+        tvSpeechRateLabel.text = String.format("Speech Rate: %.1fx", 0.5f + rateProgress * 0.1f)
 
         val initialPitch = prefs.getFloat("SPEECH_PITCH", 1.0f)
-        val pitchProgress = ((initialPitch - 0.5f) / 0.1f).toInt().coerceIn(0, 15)
+        val pitchProgress = Math.round((initialPitch - 0.5f) / 0.1f).coerceIn(0, 15)
         sbSpeechPitch.progress = pitchProgress
-        tvSpeechPitchLabel.text = String.format("Speech Pitch: %.1fx", initialPitch)
+        tvSpeechPitchLabel.text = String.format("Speech Pitch: %.1fx", 0.5f + pitchProgress * 0.1f)
 
-        sbSpeechRate.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+        sbSpeechRate.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val rate = 0.5f + (progress * 0.1f)
                 tvSpeechRateLabel.text = String.format("Speech Rate: %.1fx", rate)
             }
-            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        sbSpeechPitch.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+        sbSpeechPitch.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val pitch = 0.5f + (progress * 0.1f)
                 tvSpeechPitchLabel.text = String.format("Speech Pitch: %.1fx", pitch)
             }
-            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
+        // TTS Regional Language Spinner
+        val langNames = Settings.INDIAN_LANGUAGES.map { it.second }
+        val langAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, langNames)
+        langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerTtsLanguage.adapter = langAdapter
+
+        val savedLangCode = prefs.getString("TTS_LOCALE", "default") ?: "default"
+        val langIndex = Settings.INDIAN_LANGUAGES.indexOfFirst { it.first == savedLangCode }
+        if (langIndex >= 0) spinnerTtsLanguage.setSelection(langIndex)
+
+        // Gesture Remapping Spinners
+        val gestureKeys = Settings.GESTURE_NAMES.keys.toList()
+        val gestureDisplayNames = gestureKeys.map { Settings.GESTURE_NAMES[it] ?: "Gesture $it" }
+        val gestureAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, gestureDisplayNames)
+        gestureAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerGestureSelect.adapter = gestureAdapter
+
+        val actionPairs = Settings.GESTURE_ACTIONS
+        val actionDisplayNames = actionPairs.map { it.second }
+        val actionAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, actionDisplayNames)
+        actionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerActionSelect.adapter = actionAdapter
+
+        btnAssignGesture.setOnClickListener {
+            val selectedGestureId = gestureKeys.getOrNull(spinnerGestureSelect.selectedItemPosition) ?: return@setOnClickListener
+            val selectedActionKey = actionPairs.getOrNull(spinnerActionSelect.selectedItemPosition)?.first ?: return@setOnClickListener
+
+            Settings.GESTURE_MAP[selectedGestureId] = selectedActionKey
+            Settings.saveGestureMap(prefs)
+            val gestureName = Settings.GESTURE_NAMES[selectedGestureId]
+            val actionName = actionPairs.find { it.first == selectedActionKey }?.second
+            Toast.makeText(this, "Mapped $gestureName to $actionName", Toast.LENGTH_SHORT).show()
+        }
+
         btnSave.setOnClickListener {
-            val finalRate = 0.5f + (sbSpeechRate.progress * 0.1f)
-            val finalPitch = 0.5f + (sbSpeechPitch.progress * 0.1f)
+            val finalRate = Math.round((0.5f + (sbSpeechRate.progress * 0.1f)) * 10f) / 10f
+            val finalPitch = Math.round((0.5f + (sbSpeechPitch.progress * 0.1f)) * 10f) / 10f
+            val selectedLangCode = Settings.INDIAN_LANGUAGES.getOrNull(spinnerTtsLanguage.selectedItemPosition)?.first ?: "default"
 
             val editor = prefs.edit()
             editor.putString("GEMINI_API_KEY", etApiKey.text.toString().trim())
+            editor.putString("EMERGENCY_CONTACT_NUMBER", etEmergencyContact.text.toString().trim())
             editor.putBoolean("AUTO_TRANSLATE_ENABLED", switchAutoTranslate.isChecked)
             editor.putBoolean("SCREEN_CURTAIN_ENABLED", switchScreenCurtain.isChecked)
             editor.putBoolean("INPUT_HELP_MODE", switchInputHelp.isChecked)
-            editor.putBoolean("BOOLEAN_DEDUPLICATE", switchDeduplicate.isChecked)
+            editor.putBoolean("DEDUPLICATE_SPEECH", switchDeduplicate.isChecked)
             editor.putFloat("SPEECH_RATE", finalRate)
             editor.putFloat("SPEECH_PITCH", finalPitch)
-            
+            editor.putString("TTS_LOCALE", selectedLangCode)
+
             editor.apply()
-            
-            Toast.makeText(this, "Settings Saved. Rate: ${String.format("%.1f", finalRate)}x", Toast.LENGTH_SHORT).show()
+            Settings.initFromAndroid(prefs)
+
+            Toast.makeText(this, "Settings Saved. Speech Rate: ${finalRate}x", Toast.LENGTH_SHORT).show()
             finish()
         }
     }

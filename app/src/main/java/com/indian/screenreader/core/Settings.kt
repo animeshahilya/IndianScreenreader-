@@ -188,6 +188,51 @@ object Settings {
         18 to "long_click"           // DOUBLE_TAP_AND_HOLD
     )
 
+    var EMERGENCY_CONTACT_NUMBER = ""
+
+    val GESTURE_NAMES = mapOf(
+        4 to "Swipe Right",
+        3 to "Swipe Left",
+        1 to "Swipe Up",
+        2 to "Swipe Down",
+        14 to "Swipe Up & Right",
+        16 to "Swipe Down & Right",
+        13 to "Swipe Up & Left",
+        15 to "Swipe Down & Left",
+        17 to "Double Tap",
+        18 to "Double Tap & Hold"
+    )
+
+    val GESTURE_ACTIONS = listOf(
+        "focus_next" to "Next Focus Item",
+        "focus_prev" to "Previous Focus Item",
+        "granularity_up" to "Granularity Up",
+        "granularity_down" to "Granularity Down",
+        "open_indian_menu" to "Open Indian Context Menu",
+        "read_from_here" to "Read From Here",
+        "global_home" to "Home System Action",
+        "global_back" to "Back System Action",
+        "click" to "Click Item",
+        "long_click" to "Long Click Item"
+    )
+
+    fun saveGestureMap(prefs: SharedPreferences) {
+        val editor = prefs.edit()
+        GESTURE_MAP.forEach { (gestureId, action) ->
+            editor.putString("GESTURE_ACTION_$gestureId", action)
+        }
+        editor.apply()
+    }
+
+    fun loadGestureMap(prefs: SharedPreferences) {
+        GESTURE_MAP.keys.toList().forEach { gestureId ->
+            val savedAction = prefs.getString("GESTURE_ACTION_$gestureId", null)
+            if (savedAction != null) {
+                GESTURE_MAP[gestureId] = savedAction
+            }
+        }
+    }
+
     fun initFromAndroid(prefs: SharedPreferences) {
         GEMINI_API_KEY = prefs.getString("GEMINI_API_KEY", "") ?: ""
         AUTO_TRANSLATE_ENABLED = prefs.getBoolean("AUTO_TRANSLATE_ENABLED", false)
@@ -199,5 +244,8 @@ object Settings {
         HAPTIC_FEEDBACK_ENABLED = prefs.getBoolean("HAPTIC_FEEDBACK_ENABLED", true)
         PUNCTUATION_VERBOSITY = prefs.getString("PUNCTUATION_VERBOSITY", "all") ?: "all"
         TRANSLATION_TARGET_LANGUAGE = prefs.getString("TRANSLATION_TARGET_LANGUAGE", "Hindi") ?: "Hindi"
+        TTS_LOCALE = prefs.getString("TTS_LOCALE", "default") ?: "default"
+        EMERGENCY_CONTACT_NUMBER = prefs.getString("EMERGENCY_CONTACT_NUMBER", "") ?: ""
+        loadGestureMap(prefs)
     }
 }

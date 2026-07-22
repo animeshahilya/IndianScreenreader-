@@ -35,6 +35,13 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.telephony.SmsManager
+import android.util.Base64
+import android.view.Display
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -135,10 +142,39 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    private fun reloadSettingsFromPrefs() {
+        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+        Settings.initFromAndroid(prefs)
+        setScreenCurtainEnabled(Settings.SCREEN_CURTAIN_ENABLED)
+        tts?.setSpeechRate(Settings.SPEECH_RATE)
+        tts?.setPitch(Settings.SPEECH_PITCH)
+        setTTSLocale(Settings.TTS_LOCALE)
+        Log.i(TAG, "Native settings dynamically reloaded from SharedPreferences")
+    }
+
+    fun setTTSLocale(localeCode: String) {
+        if (!ttsInitialized || tts == null) return
+        try {
+            val locale = if (localeCode == "default") Locale.getDefault() else {
+                val parts = localeCode.split("_")
+                if (parts.size == 2) Locale(parts[0], parts[1]) else Locale(localeCode)
+            }
+            val result = tts?.setLanguage(locale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "TTS Locale $localeCode missing data or not supported, fallback to default")
+                tts?.language = Locale.getDefault()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting TTS locale", e)
+        }
+    }
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             ttsInitialized = true
-            tts?.language = Locale.getDefault()
+            setTTSLocale(Settings.TTS_LOCALE)
+            tts?.setSpeechRate(Settings.SPEECH_RATE)
+            tts?.setPitch(Settings.SPEECH_PITCH)
             
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
@@ -667,6 +703,12 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)
         }
+        try {
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error destroying SpeechRecognizer", e)
+        }
         stopSpeech()
         tts?.shutdown()
         toneGenerator?.release()
@@ -821,6 +863,14 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun startVoiceCommand() {
         mainHandler.post {
             try {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    speak("Microphone permission required for voice commands. Opening Settings...")
+                    val intent = Intent(this, SettingsActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    return@post
+                }
                 if (!SpeechRecognizer.isRecognitionAvailable(this)) {
                     speak("Voice recognition is not available on this device.")
                     return@post
@@ -849,7 +899,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 }
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                 }
                 speechRecognizer?.startListening(intent)
             } catch (e: Exception) {
@@ -919,23 +969,20 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun findTextOnScreen(query: String) {
+        if (query.isBlank()) {
+            promptSearchQuery()
+            return
+        }
         val root = rootInActiveWindow ?: return
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
-
-        if (query.isBlank()) {
-            speak("Find on screen active. Select an item or use voice command search.")
-            nodes.forEach { it.recycle() }
-            root.recycle()
-            return
-        }
 
         var found = false
         for (node in nodes) {
             val text = NodeParser.getNodeRawText(node)
             if (text.contains(query, ignoreCase = true)) {
                 node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-                speak("Found: $text")
+                speak("Found match for '$query': $text")
                 found = true
                 break
             }
@@ -946,10 +993,79 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         root.recycle()
     }
 
+    private fun promptSearchQuery() {
+        speak("Say the text you want to find on screen...")
+        mainHandler.postDelayed({
+            startVoiceCommandForSearch()
+        }, 1500)
+    }
+
+    private fun startVoiceCommandForSearch() {
+        try {
+            if (!SpeechRecognizer.isRecognitionAvailable(this) ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                speak("Microphone permission needed to search by voice. Please grant in settings.")
+                return
+            }
+            val searchRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            searchRecognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(error: Int) {
+                    speak("Search cancelled.")
+                    searchRecognizer.destroy()
+                }
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val query = matches?.firstOrNull() ?: ""
+                    searchRecognizer.destroy()
+                    if (query.isNotBlank()) {
+                        findTextOnScreen(query)
+                    }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            }
+            searchRecognizer.startListening(intent)
+        } catch (e: Exception) {
+            speak("Search error.")
+        }
+    }
+
     fun triggerEmergencySOS() {
-        speak("Emergency S.O.S. alert triggered!")
-        readDeviceStatus()
-        speak("Sending location status update...")
+        val contactNumber = Settings.EMERGENCY_CONTACT_NUMBER.trim()
+        if (contactNumber.isBlank()) {
+            speak("Emergency S.O.S. activated. No emergency contact phone number configured. Please set emergency contact number in Settings.")
+            readDeviceStatus()
+            return
+        }
+
+        speak("Emergency S.O.S. activated! Contacting $contactNumber...")
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val timeStr = SimpleDateFormat("h:mm a, d MMM", Locale.getDefault()).format(Date())
+                val message = "EMERGENCY SOS ALERT from Indian Screenreader user at $timeStr. Please check on me immediately!"
+                @Suppress("DEPRECATION")
+                val smsManager = SmsManager.getDefault()
+                smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                speak("Emergency S.O.S. text message sent successfully to $contactNumber.")
+            } catch (e: Exception) {
+                speak("Failed to send Emergency SMS text: ${e.message}")
+            }
+        } else {
+            speak("SMS permission required to send emergency text. Opening Settings...")
+            val intent = Intent(this, SettingsActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        }
     }
 
     fun readFromTop() {

@@ -100,7 +100,7 @@ object AiService {
         }
     }
 
-    private val summaryCache = android.util.LruCache<Int, String>(20)
+    private val summaryCache = android.util.LruCache<String, String>(20)
 
     fun summarizeScreenAsync(screenText: String, callback: (String) -> Unit, errorCallback: (String) -> Unit) {
         if (screenText.isBlank()) {
@@ -108,9 +108,9 @@ object AiService {
             return
         }
 
-        // Check response cache
-        val textHash = screenText.hashCode()
-        val cached = summaryCache.get(textHash)
+        // Check response cache using length + hash to prevent collisions
+        val cacheKey = "${screenText.length}_${screenText.hashCode()}"
+        val cached = summaryCache.get(cacheKey)
         if (cached != null) {
             callback("(Cached) $cached")
             return
@@ -129,7 +129,7 @@ object AiService {
                 }
                 val summary = summarizeScreen(screenText)
                 if (summary.isNotBlank() && !summary.startsWith("AI Service")) {
-                    summaryCache.put(textHash, summary)
+                    summaryCache.put(cacheKey, summary)
                 }
                 callback(summary)
             } catch (e: Exception) {
