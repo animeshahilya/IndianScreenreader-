@@ -611,11 +611,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun executeIndianMenuSelection(idx: Int) {
         when (idx) {
             0 -> aiSummarizeScreen()
-            1 -> {
-                Settings.AUTO_TRANSLATE_ENABLED = !Settings.AUTO_TRANSLATE_ENABLED
-                val state = if (Settings.AUTO_TRANSLATE_ENABLED) "Enabled" else "Disabled"
-                speak("AI Translation $state")
-            }
+            1 -> toggleAutoTranslate()
             2 -> {
                 speak("Capturing screen for AI Vision description...")
                 captureScreenForAI()
@@ -652,9 +648,21 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         speak("$timeStr, $batteryInfo".trim(' ', ','))
     }
 
+    fun toggleAutoTranslate() {
+        val newState = !Settings.AUTO_TRANSLATE_ENABLED
+        Settings.AUTO_TRANSLATE_ENABLED = newState
+        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("AUTO_TRANSLATE_ENABLED", newState).apply()
+        val state = if (newState) "Enabled" else "Disabled"
+        speak("AI Translation $state")
+    }
+
     fun toggleInputHelp() {
-        Settings.INPUT_HELP_MODE = !Settings.INPUT_HELP_MODE
-        val state = if (Settings.INPUT_HELP_MODE) "Enabled" else "Disabled"
+        val newState = !Settings.INPUT_HELP_MODE
+        Settings.INPUT_HELP_MODE = newState
+        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("INPUT_HELP_MODE", newState).apply()
+        val state = if (newState) "Enabled" else "Disabled"
         speak("Input Help Practice Mode $state")
     }
 
@@ -662,8 +670,11 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val options = listOf("none", "some", "all")
         val idx = options.indexOf(Settings.PUNCTUATION_VERBOSITY)
         val nextIdx = (idx + 1) % options.size
-        Settings.PUNCTUATION_VERBOSITY = options[nextIdx]
-        speak("Punctuation verbosity set to ${options[nextIdx]}")
+        val newVerbosity = options[nextIdx]
+        Settings.PUNCTUATION_VERBOSITY = newVerbosity
+        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("PUNCTUATION_VERBOSITY", newVerbosity).apply()
+        speak("Punctuation verbosity set to $newVerbosity")
     }
 
     fun startVoiceCommand() {

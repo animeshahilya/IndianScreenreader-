@@ -176,7 +176,7 @@ object NodeParser {
     }
 
     fun getNodeRawText(node: AccessibilityNodeInfo?, depth: Int = 0): String {
-        if (node == null || depth > 10) return ""
+        if (node == null || depth > 10 || node.isPassword) return ""
 
         val textParts = mutableListOf<String>()
 

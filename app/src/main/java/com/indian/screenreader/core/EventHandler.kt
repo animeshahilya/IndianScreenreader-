@@ -33,8 +33,8 @@ class EventHandler(private val service: IndianScreenReaderService) {
                 eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER ||
                 eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
                 
-                // If user touches the screen, cancel any active autonomous states
-                if (eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER || eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
+                // If user physically touches the screen (touch exploration hover event), cancel continuous reading
+                if (eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
                     if (Settings.CONTINUOUS_READING_ACTIVE) {
                         Settings.CONTINUOUS_READING_ACTIVE = false
                         service.stopSpeech()
