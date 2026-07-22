@@ -888,7 +888,14 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                             override fun onBufferReceived(buffer: ByteArray?) {}
                             override fun onEndOfSpeech() {}
                             override fun onError(error: Int) {
-                                speak("Voice command timed out or cancelled.")
+                                val errorMsg = when (error) {
+                                    SpeechRecognizer.ERROR_NO_MATCH -> "No speech heard. Please try speaking again."
+                                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Voice command listening timed out."
+                                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network error during voice recognition."
+                                    SpeechRecognizer.ERROR_AUDIO -> "Audio recording error."
+                                    else -> "Voice command cancelled."
+                                }
+                                speak(errorMsg)
                             }
                             override fun onResults(results: Bundle?) {
                                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)

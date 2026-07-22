@@ -77,8 +77,8 @@ object Settings {
     val GRANULARITIES = listOf("default", "control", "heading", "word", "character")
     var CURRENT_GRANULARITY_INDEX = 0
 
-    // Feature 1: Pronunciation Dictionary
-    val PRONUNCIATION_DICT = mapOf(
+    // Feature 1: Pronunciation Dictionary (ConcurrentHashMap for thread-safe custom additions)
+    val PRONUNCIATION_DICT: java.util.concurrent.ConcurrentHashMap<String, String> = java.util.concurrent.ConcurrentHashMap(mapOf(
         "irctc" to "Indian Railways Ticket Booking",
         "upi" to "Unified Payments Interface",
         "bsnl" to "Bharat Sanchar Nigam Limited",
@@ -99,7 +99,7 @@ object Settings {
         "kb" to "kilobytes",
         "mb" to "megabytes",
         "gb" to "gigabytes"
-    )
+    ))
 
     // Feature 2: Continuous Reading
     @Volatile var CONTINUOUS_READING_ACTIVE = false
@@ -233,6 +233,26 @@ object Settings {
         }
     }
 
+    fun savePronunciationDict(prefs: SharedPreferences) {
+        val editor = prefs.edit()
+        val jsonObj = org.json.JSONObject()
+        PRONUNCIATION_DICT.forEach { (k, v) -> jsonObj.put(k, v) }
+        editor.putString("CUSTOM_PRONUNCIATION_JSON", jsonObj.toString())
+        editor.apply()
+    }
+
+    fun loadPronunciationDict(prefs: SharedPreferences) {
+        val jsonStr = prefs.getString("CUSTOM_PRONUNCIATION_JSON", null) ?: return
+        try {
+            val jsonObj = org.json.JSONObject(jsonStr)
+            jsonObj.keys().forEach { key ->
+                PRONUNCIATION_DICT[key.lowercase()] = jsonObj.getString(key)
+            }
+        } catch (e: Exception) {
+            // Keep default dictionary entries
+        }
+    }
+
     fun initFromAndroid(prefs: SharedPreferences) {
         GEMINI_API_KEY = prefs.getString("GEMINI_API_KEY", "") ?: ""
         AUTO_TRANSLATE_ENABLED = prefs.getBoolean("AUTO_TRANSLATE_ENABLED", false)
@@ -247,5 +267,6 @@ object Settings {
         TTS_LOCALE = prefs.getString("TTS_LOCALE", "default") ?: "default"
         EMERGENCY_CONTACT_NUMBER = prefs.getString("EMERGENCY_CONTACT_NUMBER", "") ?: ""
         loadGestureMap(prefs)
+        loadPronunciationDict(prefs)
     }
 }

@@ -146,7 +146,14 @@ class EventHandler(private val service: IndianScreenReaderService) {
             15 -> "Back"
             17 -> "Click / Activate Element"
             18 -> "Long Click Element"
-            else -> "Custom Action $gestureId"
+            19 -> "2-Finger Single Tap"
+            20 -> "2-Finger Double Tap"
+            21 -> "2-Finger Triple Tap"
+            22 -> "3-Finger Swipe Right"
+            23 -> "3-Finger Swipe Left"
+            24 -> "3-Finger Swipe Up"
+            25 -> "3-Finger Swipe Down"
+            else -> "Gesture $gestureId"
         }
     }
 

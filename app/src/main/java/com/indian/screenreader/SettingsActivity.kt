@@ -130,6 +130,24 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "Mapped $gestureName to $actionName", Toast.LENGTH_SHORT).show()
         }
 
+        val etCustomWord = findViewById<TextInputEditText>(R.id.etCustomWord)
+        val etCustomReplacement = findViewById<TextInputEditText>(R.id.etCustomReplacement)
+        val btnAddPronunciation = findViewById<Button>(R.id.btnAddPronunciation)
+
+        btnAddPronunciation.setOnClickListener {
+            val word = etCustomWord.text.toString().trim().lowercase()
+            val replacement = etCustomReplacement.text.toString().trim()
+            if (word.isNotBlank() && replacement.isNotBlank()) {
+                Settings.PRONUNCIATION_DICT[word] = replacement
+                Settings.savePronunciationDict(prefs)
+                etCustomWord.setText("")
+                etCustomReplacement.setText("")
+                Toast.makeText(this, "Added custom pronunciation for '$word'", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Please enter both word and spoken pronunciation", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         btnSave.setOnClickListener {
             val finalRate = Math.round((0.5f + (sbSpeechRate.progress * 0.1f)) * 10f) / 10f
             val finalPitch = Math.round((0.5f + (sbSpeechPitch.progress * 0.1f)) * 10f) / 10f
