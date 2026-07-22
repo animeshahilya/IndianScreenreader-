@@ -9,6 +9,8 @@ class EventHandler(private val service: IndianScreenReaderService) {
     private var lastFocusEventTimeMs = 0L
     private var lastSpokenTimeMs = 0L
     private var lastSpokenText = ""
+    private var lastNotificationTimeMs = 0L
+    private var lastNotificationText = ""
 
     companion object {
         private const val EVENT_THROTTLE_MS = 40L
@@ -89,9 +91,12 @@ class EventHandler(private val service: IndianScreenReaderService) {
                 }
             } else if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
                 if (Settings.ANNOUNCE_NOTIFICATIONS) {
-                    val notifText = event.text?.joinToString(", ") ?: ""
-                    if (notifText.isNotBlank()) {
-                        service.speak("Notification: $notifText")
+                    val notifText = event.text.joinToString(", ").trim()
+                    val now = System.currentTimeMillis()
+                    if (notifText.isNotBlank() && (notifText != lastNotificationText || now - lastNotificationTimeMs > 3000)) {
+                        lastNotificationTimeMs = now
+                        lastNotificationText = notifText
+                        service.speak("Notification: $notifText", flush = false)
                     }
                 }
             } else if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY) {

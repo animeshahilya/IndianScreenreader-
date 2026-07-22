@@ -88,13 +88,8 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-        if (key == "SCREEN_CURTAIN_ENABLED") {
-            val enabled = sharedPreferences.getBoolean(key, false)
-            setScreenCurtainEnabled(enabled)
-        }
-        Settings.initFromAndroid(sharedPreferences)
-        Log.i(TAG, "Native settings dynamically reloaded from SharedPreferences")
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        reloadSettingsFromPrefs()
     }
 
     override fun onServiceConnected() {
@@ -184,6 +179,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                         mainHandler.post {
                             readNextNode()
                         }
+                    } else if (utteranceId?.startsWith("SearchPrompt_") == true) {
+                        mainHandler.post {
+                            startVoiceCommandForSearch()
+                        }
                     }
                 }
                 
@@ -203,13 +202,17 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    fun speak(text: String, flush: Boolean = true, isContinuous: Boolean = false) {
+    fun speak(text: String, flush: Boolean = true, isContinuous: Boolean = false, customUtteranceId: String? = null) {
         if (!isScreenOn) return
         if (ttsInitialized && text.isNotBlank()) {
             val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            val utteranceId = if (isContinuous) "Continuous_${System.currentTimeMillis()}" else "Utterance_${System.currentTimeMillis()}"
+            val utteranceId = customUtteranceId ?: if (isContinuous) "Continuous_${System.currentTimeMillis()}" else "Utterance_${System.currentTimeMillis()}"
             tts?.speak(text, queueMode, null, utteranceId)
         }
+    }
+
+    fun setSpeechPitch(pitch: Float) {
+        if (ttsInitialized) tts?.setPitch(pitch)
     }
 
     private fun clearReadingNodes() {
@@ -994,10 +997,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     private fun promptSearchQuery() {
-        speak("Say the text you want to find on screen...")
-        mainHandler.postDelayed({
-            startVoiceCommandForSearch()
-        }, 1500)
+        speak("Say the text you want to find on screen...", customUtteranceId = "SearchPrompt_${System.currentTimeMillis()}")
     }
 
     private fun startVoiceCommandForSearch() {
@@ -1055,7 +1055,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 @Suppress("DEPRECATION")
                 val smsManager = SmsManager.getDefault()
                 smsManager.sendTextMessage(contactNumber, null, message, null, null)
-                speak("Emergency S.O.S. text message sent successfully to $contactNumber.")
+                speak("Emergency S.O.S. alert message dispatched to emergency contact $contactNumber.")
             } catch (e: Exception) {
                 speak("Failed to send Emergency SMS text: ${e.message}")
             }

@@ -88,10 +88,22 @@ object NodeParser {
             formatIndianNumber(match.value)
         }
 
-        // 2. Format standalone 5, 7, 8, 9 digit numbers — EXCLUDING 6-digit OTPs and 10-digit phone numbers
+        // 2. Format standalone 5, 7, 8, 9 digit numbers
         val standaloneNumberRegex = Regex("\\b(\\d{5}|\\d{7,9})\\b")
         result = standaloneNumberRegex.replace(result) { match ->
             formatIndianNumber(match.value)
+        }
+
+        // 3. Format 6-digit numbers as Lakh UNLESS in OTP/PIN/verification context
+        val lowerText = text.lowercase()
+        val isOtpContext = lowerText.contains("otp") || lowerText.contains("pin") || lowerText.contains("code") ||
+                lowerText.contains("verification") || lowerText.contains("passcode") || lowerText.contains("one time password")
+
+        if (!isOtpContext) {
+            val sixDigitRegex = Regex("\\b\\d{6}\\b")
+            result = sixDigitRegex.replace(result) { match ->
+                formatIndianNumber(match.value)
+            }
         }
 
         return result.replace(Regex("\\s+"), " ").trim()
