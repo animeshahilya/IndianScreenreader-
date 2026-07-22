@@ -1266,21 +1266,47 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             try {
                 val timeStr = SimpleDateFormat("h:mm a, d MMM", Locale.getDefault()).format(Date())
                 val message = "EMERGENCY SOS ALERT from Indian Screenreader user at $timeStr. Please check on me immediately!"
+                var smsSent = false
+                val subManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
                 
-                val defaultSmsId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
-                val smsManager = if (defaultSmsId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(defaultSmsId)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        android.telephony.SmsManager.getSmsManagerForSubscriptionId(defaultSmsId)
+                // 1. Try to send via all active SIMs for true Dual SIM fallback
+                if (subManager != null && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                    try {
+                        val activeSubs = subManager.activeSubscriptionInfoList
+                        if (!activeSubs.isNullOrEmpty()) {
+                            for (subInfo in activeSubs) {
+                                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(subInfo.subscriptionId)
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    android.telephony.SmsManager.getSmsManagerForSubscriptionId(subInfo.subscriptionId)
+                                }
+                                smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                                smsSent = true
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Dual SIM active list fetch failed", e)
                     }
-                } else {
-                    @Suppress("DEPRECATION")
-                    android.telephony.SmsManager.getDefault()
                 }
                 
-                smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                // 2. Fallback to default SMS SIM if active list fetch failed or permission denied
+                if (!smsSent) {
+                    val defaultSmsId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
+                    val smsManager = if (defaultSmsId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(defaultSmsId)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            android.telephony.SmsManager.getSmsManagerForSubscriptionId(defaultSmsId)
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.telephony.SmsManager.getDefault()
+                    }
+                    smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                }
+                
                 speak("Emergency S.O.S. alert message dispatched to emergency contact $contactNumber.")
             } catch (e: Exception) {
                 speak("Failed to send Emergency SMS text: ${e.message}")
