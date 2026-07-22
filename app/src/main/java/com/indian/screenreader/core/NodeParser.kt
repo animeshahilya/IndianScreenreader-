@@ -91,6 +91,17 @@ object NodeParser {
         return text
     }
 
+    fun formatCharacterSpeech(text: String): String {
+        if (text.isBlank()) return "space"
+        val trimmed = text.trim()
+        val punct = PUNCTUATION_MAP_ALL[trimmed]
+        if (punct != null) return punct.trim()
+        if (trimmed.length == 1 && trimmed.first().isUpperCase()) {
+            return "Cap $trimmed"
+        }
+        return text
+    }
+
     private fun getRoleDescription(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""
         return getRoleByClassName(node.className)

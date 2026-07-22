@@ -353,6 +353,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         val matchesGranularity = when (granularity) {
             "heading" -> NodeParser.isHeading(node)
             "control" -> NodeParser.isControl(node)
+            "word", "character" -> !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
             else -> {
                 val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank() || !node.hintText.isNullOrBlank() || !node.stateDescription.isNullOrBlank() || !node.error.isNullOrBlank()
                 val isInteractive = node.isClickable || node.isCheckable || node.isFocusable || node.isHeading
@@ -376,9 +377,106 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
+    private var nodeTextOffset = 0
+    private var lastFocusedNodeBounds: android.graphics.Rect? = null
+
+    private fun performGranularityMovement(node: AccessibilityNodeInfo, isNext: Boolean, granularity: String): Boolean {
+        val granularityInt = if (granularity == "word") {
+            AccessibilityNodeInfo.MOVEMENT_GRANULARITY_WORD
+        } else {
+            AccessibilityNodeInfo.MOVEMENT_GRANULARITY_CHARACTER
+        }
+
+        val action = if (isNext) {
+            AccessibilityNodeInfo.ACTION_NEXT_AT_MOVEMENT_GRANULARITY
+        } else {
+            AccessibilityNodeInfo.ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY
+        }
+
+        val args = android.os.Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_MOVEMENT_GRANULARITY_INT, granularityInt)
+            putBoolean(AccessibilityNodeInfo.ACTION_ARGUMENT_EXTEND_SELECTION_BOOLEAN, false)
+        }
+
+        val nativeSuccess = node.performAction(action, args)
+        if (nativeSuccess) {
+            playAudioBeepForEvent("focus")
+            return true
+        }
+
+        // Fallback: manual word/character parsing on node text
+        val rawText = NodeParser.getNodeRawText(node)
+        if (rawText.isBlank()) return false
+
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+        if (lastFocusedNodeBounds != bounds) {
+            lastFocusedNodeBounds = bounds
+            nodeTextOffset = if (isNext) 0 else rawText.length
+        }
+
+        if (granularity == "character") {
+            if (isNext) {
+                if (nodeTextOffset < rawText.length) {
+                    val charStr = rawText[nodeTextOffset].toString()
+                    nodeTextOffset++
+                    speak(NodeParser.formatCharacterSpeech(charStr))
+                    playAudioBeepForEvent("focus")
+                    return true
+                }
+            } else {
+                if (nodeTextOffset > 0) {
+                    nodeTextOffset--
+                    val charStr = rawText[nodeTextOffset].toString()
+                    speak(NodeParser.formatCharacterSpeech(charStr))
+                    playAudioBeepForEvent("focus")
+                    return true
+                }
+            }
+        } else if (granularity == "word") {
+            val words = rawText.split(Regex("\\s+")).filter { it.isNotBlank() }
+            if (words.isNotEmpty()) {
+                if (isNext) {
+                    if (nodeTextOffset < words.size) {
+                        val wordStr = words[nodeTextOffset]
+                        nodeTextOffset++
+                        speak(wordStr)
+                        playAudioBeepForEvent("focus")
+                        return true
+                    }
+                } else {
+                    if (nodeTextOffset > 0) {
+                        nodeTextOffset--
+                        val wordStr = words[nodeTextOffset]
+                        speak(wordStr)
+                        playAudioBeepForEvent("focus")
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
+
     fun performFocusNext(): Boolean {
         val root = rootInActiveWindow ?: return false
         val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val granularity = Settings.GRANULARITIES.getOrElse(Settings.CURRENT_GRANULARITY_INDEX) { "default" }
+
+        if (granularity == "word" || granularity == "character") {
+            if (currentFocused != null) {
+                val moved = performGranularityMovement(currentFocused, isNext = true, granularity = granularity)
+                if (moved) {
+                    currentFocused.recycle()
+                    root.recycle()
+                    return true
+                }
+            }
+            nodeTextOffset = 0
+            lastFocusedNodeBounds = null
+        }
+
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
 
@@ -429,6 +527,21 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     fun performFocusPrevious(): Boolean {
         val root = rootInActiveWindow ?: return false
         val currentFocused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        val granularity = Settings.GRANULARITIES.getOrElse(Settings.CURRENT_GRANULARITY_INDEX) { "default" }
+
+        if (granularity == "word" || granularity == "character") {
+            if (currentFocused != null) {
+                val moved = performGranularityMovement(currentFocused, isNext = false, granularity = granularity)
+                if (moved) {
+                    currentFocused.recycle()
+                    root.recycle()
+                    return true
+                }
+            }
+            nodeTextOffset = Int.MAX_VALUE
+            lastFocusedNodeBounds = null
+        }
+
         val nodes = mutableListOf<AccessibilityNodeInfo>()
         collectFocusableNodes(root, nodes)
 

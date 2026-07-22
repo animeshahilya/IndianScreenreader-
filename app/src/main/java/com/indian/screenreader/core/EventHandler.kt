@@ -87,6 +87,11 @@ class EventHandler(private val service: IndianScreenReaderService) {
                         service.speak("Window: $windowText")
                     }
                 }
+            } else if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY) {
+                val text = event.text?.joinToString("") ?: ""
+                if (text.isNotBlank()) {
+                    service.speak(NodeParser.formatCharacterSpeech(text))
+                }
             } else if (eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
                 try {
                     var scrollY = event.scrollY
