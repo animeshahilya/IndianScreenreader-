@@ -51,6 +51,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
 
     private val executorService = Executors.newFixedThreadPool(2)
     private val audioExecutor = Executors.newSingleThreadExecutor()  // dedicated — never blocked by events
+    private val eventExecutor = Executors.newSingleThreadExecutor()  // dedicated — sequential FIFO event processing (Bug 5)
     private lateinit var eventHandler: EventHandler
 
     // readingNodes is accessed from main thread AND TTS callback thread — must be synchronized
@@ -499,7 +500,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (!isScreenOn) return
         val eventCopy = AccessibilityEvent.obtain(event)
-        executorService.execute {
+        eventExecutor.execute {
             try {
                 eventHandler.processEvent(eventCopy)
             } catch (e: Exception) {
@@ -525,6 +526,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
         try {
             setScreenCurtainEnabled(false)
+            closeVisibleContextMenu() // Tear down context menu overlay to prevent window leak (Bug 4)
             val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
             prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         } catch (e: Exception) {
@@ -533,6 +535,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         stopSpeech()
         tts?.shutdown()
         toneGenerator?.release()
+        eventExecutor.shutdown()
         executorService.shutdown()
         audioExecutor.shutdown()
     }
