@@ -187,12 +187,12 @@ object Settings {
         17 to "click",               // DOUBLE_TAP
         18 to "long_click",          // DOUBLE_TAP_AND_HOLD
         19 to "toggle_screen_curtain", // 2-Finger Single Tap
-        20 -> "read_from_top",         // 2-Finger Double Tap
-        21 -> "ai_summary",            // 2-Finger Triple Tap
-        22 -> "focus_next",            // 3-Finger Swipe Right
-        23 -> "focus_prev",            // 3-Finger Swipe Left
-        24 -> "granularity_up",        // 3-Finger Swipe Up
-        25 -> "granularity_down"       // 3-Finger Swipe Down
+        20 to "read_from_top",         // 2-Finger Double Tap
+        21 to "ai_summary",            // 2-Finger Triple Tap
+        22 to "focus_next",            // 3-Finger Swipe Right
+        23 to "focus_prev",            // 3-Finger Swipe Left
+        24 to "granularity_up",        // 3-Finger Swipe Up
+        25 to "granularity_down"       // 3-Finger Swipe Down
     ))
 
     var EMERGENCY_CONTACT_NUMBER = ""
