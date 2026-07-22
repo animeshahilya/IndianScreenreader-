@@ -377,8 +377,9 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
         }
     }
 
-    private var nodeTextOffset = 0
+    private var nodeTextOffset = -1
     private var lastFocusedNodeBounds: android.graphics.Rect? = null
+    private var lastFocusedNodeNativeSupported = false
 
     private fun performGranularityMovement(node: AccessibilityNodeInfo, isNext: Boolean, granularity: String): Boolean {
         val granularityInt = if (granularity == "word") {
@@ -398,25 +399,36 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             putBoolean(AccessibilityNodeInfo.ACTION_ARGUMENT_EXTEND_SELECTION_BOOLEAN, false)
         }
 
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+
         val nativeSuccess = node.performAction(action, args)
         if (nativeSuccess) {
+            lastFocusedNodeBounds = bounds
+            lastFocusedNodeNativeSupported = true
             playAudioBeepForEvent("focus")
             return true
+        }
+
+        // If native action failed on a node that previously succeeded natively, we've hit the text boundary
+        if (lastFocusedNodeBounds == bounds && lastFocusedNodeNativeSupported) {
+            return false
         }
 
         // Fallback: manual word/character parsing on node text
         val rawText = NodeParser.getNodeRawText(node)
         if (rawText.isBlank()) return false
 
-        val bounds = android.graphics.Rect()
-        node.getBoundsInScreen(bounds)
-        if (lastFocusedNodeBounds != bounds) {
+        val isNewNode = (lastFocusedNodeBounds != bounds)
+        if (isNewNode) {
             lastFocusedNodeBounds = bounds
-            nodeTextOffset = if (isNext) 0 else rawText.length
+            lastFocusedNodeNativeSupported = false
+            nodeTextOffset = -1
         }
 
         if (granularity == "character") {
             if (isNext) {
+                if (nodeTextOffset == -1) nodeTextOffset = 0
                 if (nodeTextOffset < rawText.length) {
                     val charStr = rawText[nodeTextOffset].toString()
                     nodeTextOffset++
@@ -425,9 +437,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     return true
                 }
             } else {
-                if (nodeTextOffset > 0) {
-                    nodeTextOffset--
+                if (nodeTextOffset == -1) nodeTextOffset = rawText.length - 1
+                if (nodeTextOffset >= 0 && nodeTextOffset < rawText.length) {
                     val charStr = rawText[nodeTextOffset].toString()
+                    nodeTextOffset--
                     speak(NodeParser.formatCharacterSpeech(charStr))
                     playAudioBeepForEvent("focus")
                     return true
@@ -437,6 +450,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             val words = rawText.split(Regex("\\s+")).filter { it.isNotBlank() }
             if (words.isNotEmpty()) {
                 if (isNext) {
+                    if (nodeTextOffset == -1) nodeTextOffset = 0
                     if (nodeTextOffset < words.size) {
                         val wordStr = words[nodeTextOffset]
                         nodeTextOffset++
@@ -445,9 +459,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                         return true
                     }
                 } else {
-                    if (nodeTextOffset > 0) {
-                        nodeTextOffset--
+                    if (nodeTextOffset == -1) nodeTextOffset = words.size - 1
+                    if (nodeTextOffset >= 0 && nodeTextOffset < words.size) {
                         val wordStr = words[nodeTextOffset]
+                        nodeTextOffset--
                         speak(wordStr)
                         playAudioBeepForEvent("focus")
                         return true
@@ -473,8 +488,9 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     return true
                 }
             }
-            nodeTextOffset = 0
+            nodeTextOffset = -1
             lastFocusedNodeBounds = null
+            lastFocusedNodeNativeSupported = false
         }
 
         val nodes = mutableListOf<AccessibilityNodeInfo>()
@@ -538,8 +554,9 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                     return true
                 }
             }
-            nodeTextOffset = Int.MAX_VALUE
+            nodeTextOffset = -1
             lastFocusedNodeBounds = null
+            lastFocusedNodeNativeSupported = false
         }
 
         val nodes = mutableListOf<AccessibilityNodeInfo>()
