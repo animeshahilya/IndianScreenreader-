@@ -22,6 +22,10 @@
         <!-- UI Accessibility Overrides -->
         <item name="android:minHeight">64dp</item>
         
+        <!-- Fix overlap with status bar -->
+        <item name="android:enforceStatusBarContrast">true</item>
+        <item name="android:fitsSystemWindows">true</item>
+        
         <item name="switchStyle">@style/Widget.App.Switch</item>
     </style>
     

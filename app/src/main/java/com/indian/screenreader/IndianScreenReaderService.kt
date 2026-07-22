@@ -249,7 +249,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                             WindowManager.LayoutParams.MATCH_PARENT,
                             WindowManager.LayoutParams.MATCH_PARENT,
                             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or 
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                             PixelFormat.TRANSLUCENT
                         )
                         windowManager?.addView(curtainView, params)
