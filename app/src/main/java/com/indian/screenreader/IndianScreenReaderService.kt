@@ -931,44 +931,55 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun aiExtractImageText() {
-        speak("Capturing screen for AI OCR text extraction...")
-        takeScreenshot(
-            Display.DEFAULT_DISPLAY,
-            applicationContext.mainExecutor,
-            object : TakeScreenshotCallback {
-                override fun onSuccess(screenshot: ScreenshotResult) {
-                    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            speak("Capturing screen for AI OCR text extraction...")
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                applicationContext.mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
                         val hardwareBuffer = screenshot.hardwareBuffer
                         val colorSpace = screenshot.colorSpace
-                        val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, colorSpace)
-                        hardwareBuffer.close()
+                        executorService.execute {
+                            try {
+                                val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, colorSpace)
+                                if (bitmap != null) {
+                                    try {
+                                        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, bitmap.width / 2, bitmap.height / 2, true)
+                                        val byteArrayOutputStream = ByteArrayOutputStream()
+                                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 75, byteArrayOutputStream)
+                                        val byteArray = byteArrayOutputStream.toByteArray()
+                                        val base64Jpeg = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+                                        if (scaledBitmap != bitmap) scaledBitmap.recycle()
 
-                        if (bitmap != null) {
-                            val copyBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                            val byteArrayOutputStream = ByteArrayOutputStream()
-                            copyBitmap.compress(Bitmap.CompressFormat.JPEG, 80, byteArrayOutputStream)
-                            val byteArray = byteArrayOutputStream.toByteArray()
-                            val base64Jpeg = Base64.encodeToString(byteArray, Base64.NO_WRAP)
-
-                            speak("Performing OCR on image text...")
-                            AiService.extractImageTextB64Async(base64Jpeg, { text ->
-                                speak(text)
-                            }, { err ->
-                                speak(err)
-                            })
-                        } else {
-                            speak("Failed to capture screenshot.")
+                                        speak("Performing OCR on image text...")
+                                        AiService.extractImageTextB64Async(base64Jpeg, { text ->
+                                            speak(text)
+                                        }, { err ->
+                                            speak(err)
+                                        })
+                                    } finally {
+                                        bitmap.recycle()
+                                    }
+                                } else {
+                                    speak("Failed to process screenshot for OCR.")
+                                }
+                            } catch (e: Exception) {
+                                speak("Error processing screenshot for OCR.")
+                            } finally {
+                                hardwareBuffer.close()
+                            }
                         }
-                    } catch (e: Exception) {
-                        speak("Error taking screenshot for OCR.")
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        speak("Screenshot capture failed for OCR.")
                     }
                 }
-
-                override fun onFailure(errorCode: Int) {
-                    speak("Screenshot capture failed for OCR.")
-                }
-            }
-        )
+            )
+        } else {
+            speak("AI OCR screen capture requires Android 11 or higher.")
+        }
     }
 
     fun findTextOnScreen(query: String) {
@@ -1175,19 +1186,21 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun captureScreenForAI() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            takeScreenshot(Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(this), object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     try {
                         val hwBuffer = screenshot.hardwareBuffer
                         executorService.execute {
                             try {
-                                val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                                val bitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
                                 if (bitmap != null) {
                                     try {
-                                        val outputStream = java.io.ByteArrayOutputStream()
-                                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
-                                        val base64 = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.DEFAULT)
+                                        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, bitmap.width / 2, bitmap.height / 2, true)
+                                        val outputStream = ByteArrayOutputStream()
+                                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                                        val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+                                        if (scaledBitmap != bitmap) scaledBitmap.recycle()
                                         
                                         AiService.describeImageB64Async(base64, { desc ->
                                             speak(desc)

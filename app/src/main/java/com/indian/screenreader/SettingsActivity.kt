@@ -153,4 +153,19 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
     }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            val audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            val smsGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+            val statusMsg = when {
+                audioGranted && smsGranted -> "Microphone & SMS permissions granted."
+                audioGranted -> "Microphone permission granted."
+                smsGranted -> "SMS permission granted."
+                else -> "Permissions denied. Voice commands or SOS features may be limited."
+            }
+            Toast.makeText(this, statusMsg, Toast.LENGTH_LONG).show()
+        }
+    }
 }

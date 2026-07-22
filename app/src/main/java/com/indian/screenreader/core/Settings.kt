@@ -174,8 +174,8 @@ object Settings {
         )
     )
 
-    // Gesture Remapping Dictionary — mutable so it can be updated from prefs
-    var GESTURE_MAP: MutableMap<Int, String> = mutableMapOf(
+    // Gesture Remapping Dictionary — ConcurrentHashMap for thread-safety across UI and event threads
+    var GESTURE_MAP: java.util.concurrent.ConcurrentHashMap<Int, String> = java.util.concurrent.ConcurrentHashMap(mapOf(
         4 to "focus_next",           // SWIPE_RIGHT
         3 to "focus_prev",           // SWIPE_LEFT
         1 to "granularity_up",       // SWIPE_UP
@@ -186,7 +186,7 @@ object Settings {
         15 to "global_back",         // SWIPE_DOWN_AND_LEFT (Back)
         17 to "click",               // DOUBLE_TAP
         18 to "long_click"           // DOUBLE_TAP_AND_HOLD
-    )
+    ))
 
     var EMERGENCY_CONTACT_NUMBER = ""
 
