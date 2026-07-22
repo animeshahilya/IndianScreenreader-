@@ -135,6 +135,42 @@
                     android:minHeight="64dp"
                     android:contentDescription="Toggle deduplicate speech. Prevents reading the exact same element twice in a row. Double tap to toggle." />
 
+                <TextView
+                    android:id="@+id/tvSpeechRateLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Speech Rate: 1.0x"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    android:layout_marginTop="12dp"
+                    android:focusable="true" />
+
+                <SeekBar
+                    android:id="@+id/sbSpeechRate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="20"
+                    android:progress="5"
+                    android:contentDescription="Adjust Speech Rate slider" />
+
+                <TextView
+                    android:id="@+id/tvSpeechPitchLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Speech Pitch: 1.0x"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    android:layout_marginTop="12dp"
+                    android:focusable="true" />
+
+                <SeekBar
+                    android:id="@+id/sbSpeechPitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="15"
+                    android:progress="5"
+                    android:contentDescription="Adjust Speech Pitch slider" />
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

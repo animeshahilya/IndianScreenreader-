@@ -87,6 +87,13 @@ class EventHandler(private val service: IndianScreenReaderService) {
                         service.speak("Window: $windowText")
                     }
                 }
+            } else if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+                if (Settings.ANNOUNCE_NOTIFICATIONS) {
+                    val notifText = event.text?.joinToString(", ") ?: ""
+                    if (notifText.isNotBlank()) {
+                        service.speak("Notification: $notifText")
+                    }
+                }
             } else if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY) {
                 val text = event.text?.joinToString("") ?: ""
                 if (text.isNotBlank()) {

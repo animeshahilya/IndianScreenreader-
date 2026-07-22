@@ -100,7 +100,22 @@ object AiService {
         }
     }
 
+    private val summaryCache = android.util.LruCache<Int, String>(20)
+
     fun summarizeScreenAsync(screenText: String, callback: (String) -> Unit, errorCallback: (String) -> Unit) {
+        if (screenText.isBlank()) {
+            callback("Screen has no readable text to summarize.")
+            return
+        }
+
+        // Check response cache
+        val textHash = screenText.hashCode()
+        val cached = summaryCache.get(textHash)
+        if (cached != null) {
+            callback("(Cached) $cached")
+            return
+        }
+
         if (!isSummarizing.compareAndSet(false, true)) {
             errorCallback("Already summarizing. Please wait.")
             return
@@ -108,10 +123,17 @@ object AiService {
 
         aiExecutor.execute {
             try {
+                if (getApiKey().isBlank()) {
+                    callback("AI Offline (API Key not set). Raw screen text: " + screenText.take(200))
+                    return@execute
+                }
                 val summary = summarizeScreen(screenText)
+                if (summary.isNotBlank() && !summary.startsWith("AI Service")) {
+                    summaryCache.put(textHash, summary)
+                }
                 callback(summary)
             } catch (e: Exception) {
-                errorCallback("Error: ${e.message}")
+                callback("AI Offline. Screen text: " + screenText.take(200))
             } finally {
                 isSummarizing.set(false)
             }
@@ -119,9 +141,6 @@ object AiService {
     }
 
     private fun summarizeScreen(screenText: String): String {
-        if (screenText.isBlank()) {
-            return "Screen has no readable text to summarize."
-        }
         val prompt = "You are an AI assistant for a blind screen reader user. " +
                 "Summarize the following mobile app screen content into 1 or 2 concise, clear sentences:\n\n" +
                 screenText
@@ -133,16 +152,18 @@ object AiService {
             callback(text)
             return
         }
-        // Stamp this translation request; if a newer one arrives, the result is discarded
         val myId = System.currentTimeMillis()
         latestTranslationId = myId
 
         translateExecutor.execute {
             try {
+                if (getApiKey().isBlank()) {
+                    if (latestTranslationId == myId) callback(text)
+                    return@execute
+                }
                 val prompt = "Translate the following text accurately into $targetLanguage. " +
                         "Output ONLY the translated string without commentary:\n\n$text"
                 val result = makeGeminiRequest(prompt)
-                // Only deliver if no newer translation has been requested
                 if (latestTranslationId == myId) {
                     callback(result)
                 }
@@ -159,11 +180,15 @@ object AiService {
         }
         aiExecutor.execute {
             try {
+                if (getApiKey().isBlank()) {
+                    callback(text)
+                    return@execute
+                }
                 val prompt = "You are an accessibility assistant for visually impaired users. " +
                         "Simplify and rewrite the following text so it is very easy to understand:\n\n$text"
                 callback(makeGeminiRequest(prompt))
             } catch (e: Exception) {
-                errorCallback(e.message ?: "Unknown error")
+                callback(text)
             }
         }
     }
@@ -175,12 +200,32 @@ object AiService {
         }
         aiExecutor.execute {
             try {
+                if (getApiKey().isBlank()) {
+                    callback("AI Offline. Please set your Gemini API Key in settings to describe images.")
+                    return@execute
+                }
                 val prompt = "Describe what is in this image concisely in 1 or 2 sentences for a blind user."
                 callback(makeGeminiRequest(prompt, base64Jpeg))
             } catch (e: Exception) {
                 errorCallback(e.message ?: "Unknown error")
             } finally {
                 isDescribingImage.set(false)
+            }
+        }
+    }
+
+    fun extractImageTextB64Async(base64Jpeg: String, callback: (String) -> Unit, errorCallback: (String) -> Unit) {
+        aiExecutor.execute {
+            try {
+                if (getApiKey().isBlank()) {
+                    callback("AI OCR Offline. Please set your Gemini API Key in settings.")
+                    return@execute
+                }
+                val prompt = "Extract and transcribe all readable text from this image accurately. Output ONLY the extracted text:"
+                val result = makeGeminiRequest(prompt, base64Jpeg)
+                callback(if (result.isNotBlank()) result else "No text found in image.")
+            } catch (e: Exception) {
+                errorCallback(e.message ?: "OCR failed.")
             }
         }
     }

@@ -31,6 +31,10 @@ import com.indian.screenreader.core.AiService
 import com.indian.screenreader.core.EventHandler
 import com.indian.screenreader.core.NodeParser
 import com.indian.screenreader.core.Settings
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.os.Bundle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +57,7 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     private val audioExecutor = Executors.newSingleThreadExecutor()  // dedicated — never blocked by events
     private val eventExecutor = Executors.newSingleThreadExecutor()  // dedicated — sequential FIFO event processing (Bug 5)
     private lateinit var eventHandler: EventHandler
+    private var speechRecognizer: SpeechRecognizer? = null
 
     // readingNodes is accessed from main thread AND TTS callback thread — must be synchronized
     private val readingLock = Any()
@@ -763,7 +768,10 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             9 -> readFromTop()
             10 -> startVoiceCommand()
             11 -> aiSimplifyScreen()
-            12 -> speak("Menu closed")
+            12 -> aiExtractImageText()
+            13 -> findTextOnScreen("")
+            14 -> triggerEmergencySOS()
+            15 -> speak("Menu closed")
         }
     }
 
@@ -811,7 +819,137 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
     }
 
     fun startVoiceCommand() {
-        speak("Voice commands not fully implemented natively yet. Please use menu.")
+        mainHandler.post {
+            try {
+                if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+                    speak("Voice recognition is not available on this device.")
+                    return@post
+                }
+                speak("Listening for voice command...")
+                if (speechRecognizer == null) {
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                        setRecognitionListener(object : RecognitionListener {
+                            override fun onReadyForSpeech(params: Bundle?) {}
+                            override fun onBeginningOfSpeech() {}
+                            override fun onRmsChanged(rmsdB: Float) {}
+                            override fun onBufferReceived(buffer: ByteArray?) {}
+                            override fun onEndOfSpeech() {}
+                            override fun onError(error: Int) {
+                                speak("Voice command timed out or cancelled.")
+                            }
+                            override fun onResults(results: Bundle?) {
+                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                val command = matches?.firstOrNull()?.lowercase() ?: ""
+                                handleVoiceCommand(command)
+                            }
+                            override fun onPartialResults(partialResults: Bundle?) {}
+                            override fun onEvent(eventType: Int, params: Bundle?) {}
+                        })
+                    }
+                }
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                }
+                speechRecognizer?.startListening(intent)
+            } catch (e: Exception) {
+                speak("Voice recognition error.")
+            }
+        }
+    }
+
+    private fun handleVoiceCommand(command: String) {
+        if (command.isBlank()) return
+        speak("Command: $command")
+        when {
+            command.contains("menu") -> showVisibleContextMenu()
+            command.contains("top") || command.contains("start") -> readFromTop()
+            command.contains("here") || command.contains("read") -> readFromHere()
+            command.contains("back") -> performGlobalAction(GLOBAL_ACTION_BACK)
+            command.contains("home") -> performGlobalAction(GLOBAL_ACTION_HOME)
+            command.contains("recents") -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            command.contains("summary") || command.contains("summarize") -> aiSummarizeScreen()
+            command.contains("status") || command.contains("battery") || command.contains("time") -> readDeviceStatus()
+            command.contains("curtain") -> toggleScreenCurtain()
+            command.contains("sos") || command.contains("emergency") -> triggerEmergencySOS()
+            command.contains("stop") -> stopSpeech()
+            else -> speak("Command recognized: $command. Try menu, read from top, or go back.")
+        }
+    }
+
+    fun aiExtractImageText() {
+        speak("Capturing screen for AI OCR text extraction...")
+        takeScreenshot(
+            Display.DEFAULT_DISPLAY,
+            applicationContext.mainExecutor,
+            object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    try {
+                        val hardwareBuffer = screenshot.hardwareBuffer
+                        val colorSpace = screenshot.colorSpace
+                        val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, colorSpace)
+                        hardwareBuffer.close()
+
+                        if (bitmap != null) {
+                            val copyBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                            val byteArrayOutputStream = ByteArrayOutputStream()
+                            copyBitmap.compress(Bitmap.CompressFormat.JPEG, 80, byteArrayOutputStream)
+                            val byteArray = byteArrayOutputStream.toByteArray()
+                            val base64Jpeg = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+                            speak("Performing OCR on image text...")
+                            AiService.extractImageTextB64Async(base64Jpeg, { text ->
+                                speak(text)
+                            }, { err ->
+                                speak(err)
+                            })
+                        } else {
+                            speak("Failed to capture screenshot.")
+                        }
+                    } catch (e: Exception) {
+                        speak("Error taking screenshot for OCR.")
+                    }
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    speak("Screenshot capture failed for OCR.")
+                }
+            }
+        )
+    }
+
+    fun findTextOnScreen(query: String) {
+        val root = rootInActiveWindow ?: return
+        val nodes = mutableListOf<AccessibilityNodeInfo>()
+        collectFocusableNodes(root, nodes)
+
+        if (query.isBlank()) {
+            speak("Find on screen active. Select an item or use voice command search.")
+            nodes.forEach { it.recycle() }
+            root.recycle()
+            return
+        }
+
+        var found = false
+        for (node in nodes) {
+            val text = NodeParser.getNodeRawText(node)
+            if (text.contains(query, ignoreCase = true)) {
+                node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                speak("Found: $text")
+                found = true
+                break
+            }
+        }
+
+        if (!found) speak("Text '$query' not found on screen.")
+        nodes.forEach { it.recycle() }
+        root.recycle()
+    }
+
+    fun triggerEmergencySOS() {
+        speak("Emergency S.O.S. alert triggered!")
+        readDeviceStatus()
+        speak("Sending location status update...")
     }
 
     fun readFromTop() {

@@ -31,6 +31,21 @@ object Settings {
     var ANNOUNCE_GRID_POSITION = true
     var ANNOUNCE_LIST_COUNT = true
     var ANNOUNCE_VIEW_IDS = false
+    var ANNOUNCE_NOTIFICATIONS = true
+    var TTS_LOCALE = "default"
+
+    val INDIAN_LANGUAGES = listOf(
+        "default" to "Default System Voice",
+        "hi_IN" to "Hindi (हिंदी)",
+        "bn_IN" to "Bengali (বাংলা)",
+        "ta_IN" to "Tamil (தமிழ்)",
+        "te_IN" to "Telugu (తెలుగు)",
+        "mr_IN" to "Marathi (मराठी)",
+        "kn_IN" to "Kannada (ಕನ್ನಡ)",
+        "ml_IN" to "Malayalam (മലയാളം)",
+        "gu_IN" to "Gujarati (ગુજરાતી)",
+        "pa_IN" to "Punjabi (ਪੰਜਾਬੀ)"
+    )
 
     // Indian Menu State (visual overlay — no state machine needed)
     val INDIAN_MENU_ITEMS = listOf(
@@ -46,7 +61,10 @@ object Settings {
         "10. Read From Top",
         "11. Voice Command Mode",
         "12. AI Simplify Screen",
-        "13. Close Indian Menu"
+        "13. AI OCR (Extract Text in Image)",
+        "14. Find Text on Screen",
+        "15. Emergency SOS Alert",
+        "16. Close Indian Menu"
     )
 
     // Gemini

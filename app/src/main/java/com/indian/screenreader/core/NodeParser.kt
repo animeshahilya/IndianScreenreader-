@@ -58,6 +58,36 @@ object NodeParser {
         return className?.let { CLASS_ROLE_MAP[it.toString()] } ?: ""
     }
 
+    private fun formatIndianNumber(numStr: String): String {
+        return try {
+            val cleanNum = numStr.replace(",", "").toLong()
+            if (cleanNum < 100000) return numStr
+            val crore = cleanNum / 10000000
+            val lakh = (cleanNum % 10000000) / 100000
+            val thousand = (cleanNum % 100000) / 1000
+            val remainder = cleanNum % 1000
+
+            val parts = mutableListOf<String>()
+            if (crore > 0) parts.add("$crore crore")
+            if (lakh > 0) parts.add("$lakh lakh")
+            if (thousand > 0) parts.add("$thousand thousand")
+            if (remainder > 0) parts.add("$remainder")
+            parts.joinToString(" ")
+        } catch (e: Exception) {
+            numStr
+        }
+    }
+
+    fun applyIndianNumberFormatting(text: String): String {
+        if (text.isBlank()) return text
+        var result = text.replace("₹", " rupees ").replace("Rs.", " rupees ").replace("INR", " rupees ")
+        val regex = Regex("\\b\\d{1,2}(,\\d{2})*(,\\d{3})\\b|\\b\\d{5,10}\\b")
+        result = regex.replace(result) { match ->
+            formatIndianNumber(match.value)
+        }
+        return result.replace(Regex("\\s+"), " ").trim()
+    }
+
     private fun applyPronunciationDict(text: String): String {
         var result = text
         Settings.PRONUNCIATION_DICT.forEach { (key, replacement) ->
@@ -236,6 +266,7 @@ object NodeParser {
             return ""
         }
 
+        rawText = applyIndianNumberFormatting(rawText)
         rawText = applyPronunciationDict(rawText)
         rawText = applyPunctuationVerbosity(rawText, Settings.PUNCTUATION_VERBOSITY)
         rawText = formatCapitalization(rawText, Settings.CAPITALIZATION_ANNOUNCEMENT)
