@@ -925,201 +925,6 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
             command.contains("home") -> performGlobalAction(GLOBAL_ACTION_HOME)
             command.contains("recents") -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             command.contains("summary") || command.contains("summarize") -> aiSummarizeScreen()
-                    themeContext,
-                    android.R.layout.simple_list_item_1,
-                    Settings.INDIAN_MENU_ITEMS
-                )
-                listView?.adapter = adapter
-
-                listView?.setOnItemClickListener { _, _, position, _ ->
-                    closeVisibleContextMenu {
-                        executeIndianMenuSelection(position)
-                    }
-                }
-
-                btnCancel?.setOnClickListener {
-                    closeVisibleContextMenu()
-                }
-
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    // FLAG_NOT_TOUCH_MODAL: touches outside the card dismiss the menu
-                    // FLAG_WATCH_OUTSIDE_TOUCH: we receive the outside touch event
-                    // NOT using FLAG_NOT_FOCUSABLE alone as it blocks all touch routing
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-                    PixelFormat.TRANSLUCENT
-                )
-                
-                windowManager?.addView(contextMenuView, params)
-                speak("Indian Context Menu opened")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error showing Context Menu overlay", e)
-            }
-        }
-    }
-
-    private fun closeVisibleContextMenu(onClosed: (() -> Unit)? = null) {
-        // Already on main thread from OnItemClickListener — do work directly, no double-post
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            contextMenuView?.let {
-                try { windowManager?.removeView(it) } catch (e: Exception) { /* already removed */ }
-                contextMenuView = null
-                speak("Menu closed")
-            }
-            onClosed?.invoke()
-        } else {
-            mainHandler.post {
-                contextMenuView?.let {
-                    try { windowManager?.removeView(it) } catch (e: Exception) { /* already removed */ }
-                    contextMenuView = null
-                    speak("Menu closed")
-                }
-                onClosed?.invoke()
-            }
-        }
-    }
-
-    fun executeIndianMenuSelection(idx: Int) {
-        when (idx) {
-            0 -> aiSummarizeScreen()
-            1 -> toggleAutoTranslate()
-            2 -> {
-                speak("Capturing screen for AI Vision description...")
-                captureScreenForAI()
-            }
-            3 -> readDeviceStatus()
-            4 -> toggleInputHelp()
-            5 -> {
-                val granularities = Settings.GRANULARITIES
-                Settings.CURRENT_GRANULARITY_INDEX = (Settings.CURRENT_GRANULARITY_INDEX + 1) % granularities.size
-                val currentName = granularities[Settings.CURRENT_GRANULARITY_INDEX].replaceFirstChar { it.uppercase() }
-                speak("Granularity: $currentName")
-            }
-            6 -> togglePunctuationVerbosity()
-            7 -> toggleScreenCurtain()
-            8 -> readFromHere()
-            9 -> readFromTop()
-            10 -> startVoiceCommand()
-            11 -> aiSimplifyScreen()
-            12 -> aiExtractImageText()
-            13 -> findTextOnScreen("")
-            14 -> triggerEmergencySOS()
-            15 -> speak("Menu closed")
-        }
-    }
-
-    // AI & Utility Actions 
-    
-    fun readDeviceStatus() {
-        val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-        val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val batteryStatus = registerReceiver(null, batteryFilter)
-        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        val batteryPct = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
-        
-        val batteryInfo = if (batteryPct >= 0) "Battery $batteryPct percent" else ""
-        speak("$timeStr, $batteryInfo".trim(' ', ','))
-    }
-
-    fun toggleAutoTranslate() {
-        val newState = !Settings.AUTO_TRANSLATE_ENABLED
-        Settings.AUTO_TRANSLATE_ENABLED = newState
-        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("AUTO_TRANSLATE_ENABLED", newState).apply()
-        val state = if (newState) "Enabled" else "Disabled"
-        speak("AI Translation $state")
-    }
-
-    fun toggleInputHelp() {
-        val newState = !Settings.INPUT_HELP_MODE
-        Settings.INPUT_HELP_MODE = newState
-        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("INPUT_HELP_MODE", newState).apply()
-        val state = if (newState) "Enabled" else "Disabled"
-        speak("Input Help Practice Mode $state")
-    }
-
-    fun togglePunctuationVerbosity() {
-        val options = listOf("none", "some", "all")
-        val idx = options.indexOf(Settings.PUNCTUATION_VERBOSITY)
-        val nextIdx = (idx + 1) % options.size
-        val newVerbosity = options[nextIdx]
-        Settings.PUNCTUATION_VERBOSITY = newVerbosity
-        val prefs = getSharedPreferences("IndianScreenreaderPrefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("PUNCTUATION_VERBOSITY", newVerbosity).apply()
-        speak("Punctuation verbosity set to $newVerbosity")
-    }
-
-    fun startVoiceCommand() {
-        mainHandler.post {
-            try {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    speak("Microphone permission required for voice commands. Opening Settings...")
-                    val intent = Intent(this, SettingsActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(intent)
-                    return@post
-                }
-                if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-                    speak("Voice recognition is not available on this device.")
-                    return@post
-                }
-                speak("Listening for voice command...")
-                if (speechRecognizer == null) {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                        setRecognitionListener(object : RecognitionListener {
-                            override fun onReadyForSpeech(params: Bundle?) {}
-                            override fun onBeginningOfSpeech() {}
-                            override fun onRmsChanged(rmsdB: Float) {}
-                            override fun onBufferReceived(buffer: ByteArray?) {}
-                            override fun onEndOfSpeech() {}
-                            override fun onError(error: Int) {
-                                val errorMsg = when (error) {
-                                    SpeechRecognizer.ERROR_NO_MATCH -> "No speech heard. Please try speaking again."
-                                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Voice command listening timed out."
-                                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network error during voice recognition."
-                                    SpeechRecognizer.ERROR_AUDIO -> "Audio recording error."
-                                    else -> "Voice command cancelled."
-                                }
-                                speak(errorMsg)
-                            }
-                            override fun onResults(results: Bundle?) {
-                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                val command = matches?.firstOrNull()?.lowercase() ?: ""
-                                handleVoiceCommand(command)
-                            }
-                            override fun onPartialResults(partialResults: Bundle?) {}
-                            override fun onEvent(eventType: Int, params: Bundle?) {}
-                        })
-                    }
-                }
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                }
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) {
-                speak("Voice recognition error.")
-            }
-        }
-    }
-
-    private fun handleVoiceCommand(command: String) {
-        if (command.isBlank()) return
-        speak("Command: $command")
-        when {
-            command.contains("menu") -> showVisibleContextMenu()
-            command.contains("top") || command.contains("start") -> readFromTop()
-            command.contains("here") || command.contains("read") -> readFromHere()
-            command.contains("back") -> performGlobalAction(GLOBAL_ACTION_BACK)
-            command.contains("home") -> performGlobalAction(GLOBAL_ACTION_HOME)
-            command.contains("recents") -> performGlobalAction(GLOBAL_ACTION_RECENTS)
-            command.contains("summary") || command.contains("summarize") -> aiSummarizeScreen()
             command.contains("status") || command.contains("battery") || command.contains("time") -> readDeviceStatus()
             command.contains("curtain") -> toggleScreenCurtain()
             command.contains("sos") || command.contains("emergency") -> triggerEmergencySOS()
@@ -1267,43 +1072,52 @@ class IndianScreenReaderService : AccessibilityService(), TextToSpeech.OnInitLis
                 val timeStr = SimpleDateFormat("h:mm a, d MMM", Locale.getDefault()).format(Date())
                 val message = "EMERGENCY SOS ALERT from Indian Screenreader user at $timeStr. Please check on me immediately!"
                 var smsSent = false
-                val subManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
-                
                 // 1. Try to send via all active SIMs for true Dual SIM fallback
-                if (subManager != null && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                    try {
-                        val activeSubs = subManager.activeSubscriptionInfoList
-                        if (!activeSubs.isNullOrEmpty()) {
-                            for (subInfo in activeSubs) {
-                                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(subInfo.subscriptionId)
-                                } else {
-                                    @Suppress("DEPRECATION")
-                                    android.telephony.SmsManager.getSmsManagerForSubscriptionId(subInfo.subscriptionId)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    val subManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+                    if (subManager != null && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                        try {
+                            val activeSubs = subManager.activeSubscriptionInfoList
+                            if (!activeSubs.isNullOrEmpty()) {
+                                for (subInfo in activeSubs) {
+                                    val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(subInfo.subscriptionId)
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        android.telephony.SmsManager.getSmsManagerForSubscriptionId(subInfo.subscriptionId)
+                                    }
+                                    smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                                    smsSent = true
                                 }
-                                smsManager.sendTextMessage(contactNumber, null, message, null, null)
-                                smsSent = true
                             }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Dual SIM active list fetch failed", e)
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Dual SIM active list fetch failed", e)
+                    }
+                    
+                    // 2. Fallback to default SMS SIM if active list fetch failed or permission denied
+                    if (!smsSent) {
+                        val defaultSmsId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
+                        val smsManager = if (defaultSmsId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(defaultSmsId)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                android.telephony.SmsManager.getSmsManagerForSubscriptionId(defaultSmsId)
+                            }
+                        } else {
+                            @Suppress("DEPRECATION")
+                            android.telephony.SmsManager.getDefault()
+                        }
+                        smsManager.sendTextMessage(contactNumber, null, message, null, null)
+                        smsSent = true
                     }
                 }
                 
-                // 2. Fallback to default SMS SIM if active list fetch failed or permission denied
+                // 3. Ultimate fallback for API < 22 where SubscriptionManager doesn't exist
                 if (!smsSent) {
-                    val defaultSmsId = android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId()
-                    val smsManager = if (defaultSmsId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            getSystemService(android.telephony.SmsManager::class.java).createForSubscriptionId(defaultSmsId)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            android.telephony.SmsManager.getSmsManagerForSubscriptionId(defaultSmsId)
-                        }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        android.telephony.SmsManager.getDefault()
-                    }
+                    @Suppress("DEPRECATION")
+                    val smsManager = android.telephony.SmsManager.getDefault()
                     smsManager.sendTextMessage(contactNumber, null, message, null, null)
                 }
                 

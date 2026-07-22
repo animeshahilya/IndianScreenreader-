@@ -37,6 +37,9 @@ class SettingsActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             missingPermissions.add(Manifest.permission.SEND_SMS)
         }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(Manifest.permission.READ_PHONE_STATE)
+        }
         if (missingPermissions.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 101)
         }
@@ -177,7 +180,9 @@ class SettingsActivity : AppCompatActivity() {
         if (requestCode == 101) {
             val audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             val smsGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+            val phoneStateGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
             val statusMsg = when {
+                audioGranted && smsGranted && phoneStateGranted -> "Microphone, SMS & Phone State permissions granted."
                 audioGranted && smsGranted -> "Microphone & SMS permissions granted."
                 audioGranted -> "Microphone permission granted."
                 smsGranted -> "SMS permission granted."

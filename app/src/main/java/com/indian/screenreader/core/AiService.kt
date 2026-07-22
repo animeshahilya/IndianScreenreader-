@@ -191,7 +191,7 @@ object AiService {
                         "Simplify and rewrite the following text so it is very easy to understand:\n\n$text"
                 callback(makeGeminiRequest(prompt))
             } catch (e: Exception) {
-                callback(text)
+                errorCallback(e.message ?: "Failed to simplify text.")
             }
         }
     }

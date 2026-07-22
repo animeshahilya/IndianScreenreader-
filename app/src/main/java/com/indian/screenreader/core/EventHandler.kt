@@ -100,7 +100,7 @@ class EventHandler(private val service: IndianScreenReaderService) {
                     }
                 }
             } else if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY) {
-                val text = event.text?.joinToString("") ?: ""
+                val text = event.text.joinToString("")
                 if (text.isNotBlank()) {
                     service.speak(NodeParser.formatCharacterSpeech(text))
                 }
